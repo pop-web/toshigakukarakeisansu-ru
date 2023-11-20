@@ -35,7 +35,11 @@ const App = () => {
       const totalShares = Math.floor(investmentAmount / stockPrice);
       const purchasableShares =
         Math.floor(totalShares / unitShares) * unitShares;
-      setResult(`購入可能株数: ${purchasableShares} 株`);
+      const requiredInvestment = purchasableShares * stockPrice; // 必要な投資金額の計算
+
+      setResult(
+        `購入可能株数: ${purchasableShares} 株（投資額: ${requiredInvestment}円）`
+      );
     } else {
       setResult("株価を正しく入力してください。");
     }
@@ -46,7 +50,7 @@ const App = () => {
       <Box p={4}>
         <form onSubmit={handleSubmit(onSubmit)}>
           <VStack spacing={4}>
-            <Text fontSize="xl">投資金額から株数計算スール</Text>
+            <Text fontSize="xl">投資額から株数計算スール</Text>
             <InputGroup justifyContent="center">
               <Controller
                 name="unitShares"
@@ -77,7 +81,7 @@ const App = () => {
                 control={control}
                 render={({ field }) => (
                   <NumberInput>
-                    <NumberInputField {...field} placeholder="投資金額" />
+                    <NumberInputField {...field} placeholder="投資額" />
                   </NumberInput>
                 )}
               />
