@@ -8,6 +8,8 @@ import {
   InputGroup,
   NumberInput,
   NumberInputField,
+  Flex,
+  Center,
 } from "@chakra-ui/react";
 import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
@@ -53,39 +55,54 @@ const App = () => {
             <Text fontSize="xl">投資金額から株数計算スール</Text>
             <InputGroup justifyContent="center">
               <Controller
-                name="unitShares"
+                name="investmentAmount"
                 control={control}
                 render={({ field }) => (
-                  <NumberInput defaultValue={100}>
-                    <NumberInputField {...field} placeholder="株数" />
-                  </NumberInput>
+                  <Flex>
+                    <Center>
+                      <Text>投資金額：</Text>
+                      <NumberInput>
+                        <NumberInputField {...field} />
+                      </NumberInput>
+                    </Center>
+                  </Flex>
                 )}
               />
-              <InputRightAddon children="株" />
+              <InputRightAddon children="円" />
             </InputGroup>
             <InputGroup justifyContent="center">
               <Controller
                 name="stockPrice"
                 control={control}
                 render={({ field }) => (
-                  <NumberInput>
-                    <NumberInputField {...field} placeholder="株価" />
-                  </NumberInput>
+                  <Flex>
+                    <Center>
+                      <Text>株価：</Text>
+                      <NumberInput>
+                        <NumberInputField {...field} />
+                      </NumberInput>
+                    </Center>
+                  </Flex>
                 )}
               />
               <InputRightAddon children="円" />
             </InputGroup>
             <InputGroup justifyContent="center">
               <Controller
-                name="investmentAmount"
+                name="unitShares"
                 control={control}
                 render={({ field }) => (
-                  <NumberInput>
-                    <NumberInputField {...field} placeholder="投資金額" />
-                  </NumberInput>
+                  <Flex>
+                    <Center>
+                      <Text>単元株：</Text>
+                      <NumberInput defaultValue={100}>
+                        <NumberInputField {...field} />
+                      </NumberInput>
+                    </Center>
+                  </Flex>
                 )}
               />
-              <InputRightAddon children="円" />
+              <InputRightAddon children="株" />
             </InputGroup>
             <Button colorScheme="blue" type="submit">
               計算
