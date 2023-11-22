@@ -40,7 +40,7 @@ const App = () => {
       const requiredInvestment = purchasableShares * stockPrice; // 必要な投資金額の計算
 
       setResult(
-        `購入可能株数: ${purchasableShares} 株（投資金額: ${requiredInvestment}円）`
+        `購入可能株数： ${purchasableShares.toLocaleString()} 株（投資金額： ${requiredInvestment.toLocaleString()}円）`
       );
     } else {
       setResult("株価を正しく入力してください。");
