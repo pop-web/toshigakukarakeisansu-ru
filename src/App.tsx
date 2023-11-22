@@ -60,7 +60,9 @@ const App = () => {
                 render={({ field }) => (
                   <Flex>
                     <Center>
-                      <Text>投資金額：</Text>
+                      <Text w={20} textAlign="right">
+                        投資金額：
+                      </Text>
                       <NumberInput>
                         <NumberInputField {...field} />
                       </NumberInput>
@@ -77,7 +79,9 @@ const App = () => {
                 render={({ field }) => (
                   <Flex>
                     <Center>
-                      <Text>株価：</Text>
+                      <Text w={20} textAlign="right">
+                        株価：
+                      </Text>
                       <NumberInput>
                         <NumberInputField {...field} />
                       </NumberInput>
@@ -94,7 +98,9 @@ const App = () => {
                 render={({ field }) => (
                   <Flex>
                     <Center>
-                      <Text>単元株：</Text>
+                      <Text w={20} textAlign="right">
+                        単元株：
+                      </Text>
                       <NumberInput defaultValue={100}>
                         <NumberInputField {...field} />
                       </NumberInput>
