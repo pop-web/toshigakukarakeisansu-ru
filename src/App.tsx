@@ -11,8 +11,11 @@ import {
   NumberInputField,
   Flex,
   Center,
+  InputRightElement,
+  IconButton,
 } from "@chakra-ui/react";
 import { useForm, Controller } from "react-hook-form";
+import { SmallCloseIcon } from "@chakra-ui/icons";
 
 type FormData = {
   stockPrice: number;
@@ -20,13 +23,18 @@ type FormData = {
 };
 
 const App = () => {
-  const { control, handleSubmit } = useForm<FormData>({
+  const { control, handleSubmit, setValue, getValues } = useForm<FormData>({
     defaultValues: {
       stockPrice: 0,
       investmentAmount: 0,
     },
   });
   const [result, setResult] = useState("");
+  const [showClearButton, setShowClearButton] = useState(false);
+  const addAmount = (amount: number) => {
+    const currentAmount = getValues("investmentAmount");
+    setValue("investmentAmount", currentAmount + amount);
+  };
 
   const onSubmit = (data: FormData) => {
     const unitShares = 100; // 単元株を固定値として設定
@@ -57,6 +65,16 @@ const App = () => {
     }
   };
 
+  const clearInvestmentAmount = () => {
+    setValue("investmentAmount", 0);
+  };
+
+  const handleInvestmentAmountChange = (value: string) => {
+    const numericValue = parseFloat(value.replace(/,/g, ""));
+    setValue("investmentAmount", numericValue);
+    setShowClearButton(numericValue > 0);
+  };
+
   return (
     <ChakraProvider>
       <Box p={4}>
@@ -73,14 +91,44 @@ const App = () => {
                       <Text w={20} textAlign="right">
                         投資金額：
                       </Text>
-                      <NumberInput>
+                      <NumberInput
+                        value={field.value}
+                        onChange={(value) =>
+                          handleInvestmentAmountChange(value)
+                        }
+                      >
                         <NumberInputField {...field} />
+
+                        {showClearButton && (
+                          <InputRightElement width="2.5rem">
+                            <IconButton
+                              size={"xs"}
+                              isRound={true}
+                              variant="solid"
+                              aria-label="Done"
+                              fontSize="10px"
+                              icon={<SmallCloseIcon />}
+                              onClick={clearInvestmentAmount}
+                            />
+                          </InputRightElement>
+                        )}
                       </NumberInput>
                     </Center>
                   </Flex>
                 )}
               />
               <InputRightAddon children="円" />
+            </InputGroup>
+            <InputGroup justifyContent="center" gap={1}>
+              <Button width="100px" onClick={() => addAmount(100000)}>
+                +10万
+              </Button>
+              <Button width="100px" onClick={() => addAmount(1000000)}>
+                +100万
+              </Button>
+              <Button width="100px" onClick={() => addAmount(10000000)}>
+                +1000万
+              </Button>
             </InputGroup>
             <InputGroup justifyContent="center">
               <Controller
@@ -92,7 +140,7 @@ const App = () => {
                       <Text w={20} textAlign="right">
                         株価：
                       </Text>
-                      <NumberInput>
+                      <NumberInput defaultValue={0}>
                         <NumberInputField {...field} />
                       </NumberInput>
                     </Center>
