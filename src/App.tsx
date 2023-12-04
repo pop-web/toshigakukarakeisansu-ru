@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ChakraProvider,
   Box,
@@ -11,11 +12,9 @@ import {
   Flex,
   Center,
 } from "@chakra-ui/react";
-import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 
 type FormData = {
-  unitShares: number;
   stockPrice: number;
   investmentAmount: number;
 };
@@ -23,7 +22,6 @@ type FormData = {
 const App = () => {
   const { control, handleSubmit } = useForm<FormData>({
     defaultValues: {
-      unitShares: 100,
       stockPrice: 0,
       investmentAmount: 0,
     },
@@ -31,19 +29,27 @@ const App = () => {
   const [result, setResult] = useState("");
 
   const onSubmit = (data: FormData) => {
-    const { unitShares, stockPrice, investmentAmount } = data;
+    const unitShares = 100; // 単元株を固定値として設定
 
-    if (stockPrice > 0) {
+    // カンマを取り除いて数値に変換
+    const stockPrice = parseFloat(data.stockPrice.toString().replace(/,/g, ""));
+    const investmentAmount = parseFloat(
+      data.investmentAmount.toString().replace(/,/g, "")
+    );
+
+    if (stockPrice > 0 && investmentAmount > 0) {
       const totalShares = Math.floor(investmentAmount / stockPrice);
       const purchasableShares =
         Math.floor(totalShares / unitShares) * unitShares;
-      const requiredInvestment = purchasableShares * stockPrice; // 必要な投資金額の計算
+      const requiredInvestment = purchasableShares * stockPrice;
 
       setResult(
         `購入可能株数： ${purchasableShares} 株（投資金額： ${requiredInvestment}円）`
       );
-    } else {
+    } else if (stockPrice <= 0) {
       setResult("株価を正しく入力してください。");
+    } else if (investmentAmount <= 0) {
+      setResult("投資金額を正しく入力してください。");
     }
   };
 
@@ -91,27 +97,8 @@ const App = () => {
               />
               <InputRightAddon children="円" />
             </InputGroup>
-            <InputGroup justifyContent="center">
-              <Controller
-                name="unitShares"
-                control={control}
-                render={({ field }) => (
-                  <Flex>
-                    <Center>
-                      <Text w={20} textAlign="right">
-                        単元株：
-                      </Text>
-                      <NumberInput defaultValue={100}>
-                        <NumberInputField {...field} />
-                      </NumberInput>
-                    </Center>
-                  </Flex>
-                )}
-              />
-              <InputRightAddon children="株" />
-            </InputGroup>
             <Button colorScheme="blue" type="submit">
-              計算
+              株数計算
             </Button>
           </VStack>
         </form>
