@@ -41,11 +41,15 @@ const App = () => {
       const totalShares = Math.floor(investmentAmount / stockPrice);
       const purchasableShares =
         Math.floor(totalShares / unitShares) * unitShares;
-      const requiredInvestment = purchasableShares * stockPrice;
 
-      setResult(
-        `購入可能株数： ${purchasableShares} 株（投資金額： ${requiredInvestment}円）`
-      );
+      if (purchasableShares > 0) {
+        const requiredInvestment = purchasableShares * stockPrice; // 必要な投資金額の計算
+        setResult(
+          `購入可能株数： ${purchasableShares} 株（投資金額： ${requiredInvestment}円）`
+        );
+      } else {
+        setResult("投資金額が足りないため、株を購入することができません。");
+      }
     } else if (stockPrice <= 0) {
       setResult("株価を正しく入力してください。");
     } else if (investmentAmount <= 0) {
