@@ -34,12 +34,9 @@ const App = () => {
 
   const onSubmit = (data: FormData) => {
     const unitShares = 100; // 単元株を固定値として設定
-
-    // カンマを取り除いて数値に変換
     const stockPrice = parseFloat(data.stockPrice.toString().replace(/,/g, ""));
-    const investmentAmount = parseFloat(
-      data.investmentAmount.toString().replace(/,/g, "")
-    );
+    const investmentAmount =
+      parseFloat(data.investmentAmount.toString().replace(/,/g, "")) * 10000; // 万円単位を円単位に変換
 
     if (stockPrice > 0 && investmentAmount > 0) {
       const totalShares = Math.floor(investmentAmount / stockPrice);
@@ -52,7 +49,10 @@ const App = () => {
           `購入可能株数は、${purchasableShares.toLocaleString()}株です。\n投資金額は、${requiredInvestment.toLocaleString()}円となります。`
         );
       } else {
-        setResult("投資金額が足りないため、株を購入することができません。");
+        const minimumRequiredInvestment = stockPrice * unitShares; // 最低限必要な投資金額の計算
+        setResult(
+          `投資金額が足りないため、株を購入することができません。\n最低限 ${minimumRequiredInvestment.toLocaleString()}円の投資金額が必要です。`
+        );
       }
     } else if (investmentAmount <= 0) {
       setResult("投資金額を正しく入力してください。");
@@ -105,7 +105,7 @@ const App = () => {
                   </Flex>
                 )}
               />
-              <InputRightAddon children="円" />
+              <InputRightAddon children="万円" />
             </InputGroup>
             <InputGroup>
               <Controller
