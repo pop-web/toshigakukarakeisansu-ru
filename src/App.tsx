@@ -6,16 +6,12 @@ import {
   Text,
   InputRightAddon,
   InputGroup,
-  NumberInput,
-  NumberInputField,
   Flex,
   Center,
-  InputRightElement,
-  IconButton,
   Stack,
+  Input,
 } from "@chakra-ui/react";
 import { useForm, Controller } from "react-hook-form";
-import { SmallCloseIcon } from "@chakra-ui/icons";
 
 type FormData = {
   stockPrice: number;
@@ -23,14 +19,13 @@ type FormData = {
 };
 
 const App = () => {
-  const { control, handleSubmit, setValue } = useForm<FormData>({
+  const { control, handleSubmit } = useForm<FormData>({
     defaultValues: {
       stockPrice: 0,
       investmentAmount: 0,
     },
   });
   const [result, setResult] = useState("");
-  const [showClearButton] = useState(false);
 
   const onSubmit = (data: FormData) => {
     const unitShares = 100; // 単元株を固定値として設定
@@ -61,10 +56,6 @@ const App = () => {
     }
   };
 
-  const clearInvestmentAmount = () => {
-    setValue("investmentAmount", 0);
-  };
-
   return (
     <ChakraProvider>
       <Box p={4}>
@@ -84,23 +75,7 @@ const App = () => {
                   <Flex>
                     <Center>
                       <Text w={20}>投資金額</Text>
-                      <NumberInput>
-                        <NumberInputField maxW="170px" {...field} />
-
-                        {showClearButton && (
-                          <InputRightElement width="2.5rem">
-                            <IconButton
-                              size={"xs"}
-                              isRound={true}
-                              variant="solid"
-                              aria-label="Done"
-                              fontSize="10px"
-                              icon={<SmallCloseIcon />}
-                              onClick={clearInvestmentAmount}
-                            />
-                          </InputRightElement>
-                        )}
-                      </NumberInput>
+                      <Input {...field} maxW="170px" />
                     </Center>
                   </Flex>
                 )}
@@ -115,9 +90,7 @@ const App = () => {
                   <Flex>
                     <Center>
                       <Text w={20}>株価</Text>
-                      <NumberInput>
-                        <NumberInputField maxW="170px" {...field} />
-                      </NumberInput>
+                      <Input {...field} maxW="170px" />{" "}
                     </Center>
                   </Flex>
                 )}
