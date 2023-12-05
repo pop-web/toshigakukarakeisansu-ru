@@ -3,7 +3,6 @@ import {
   ChakraProvider,
   Box,
   Button,
-  VStack,
   Text,
   InputRightAddon,
   InputGroup,
@@ -13,6 +12,7 @@ import {
   Center,
   InputRightElement,
   IconButton,
+  Stack,
 } from "@chakra-ui/react";
 import { useForm, Controller } from "react-hook-form";
 import { SmallCloseIcon } from "@chakra-ui/icons";
@@ -69,35 +69,27 @@ const App = () => {
     setValue("investmentAmount", 0);
   };
 
-  const handleInvestmentAmountChange = (value: string) => {
-    const numericValue = parseFloat(value.replace(/,/g, ""));
-    setValue("investmentAmount", numericValue);
-    setShowClearButton(numericValue > 0);
-  };
-
   return (
     <ChakraProvider>
       <Box p={4}>
         <form onSubmit={handleSubmit(onSubmit)}>
-          <VStack spacing={4}>
-            <Text fontSize="xl">投資金額から株数計算スール</Text>
-            <InputGroup justifyContent="center">
+          <Stack spacing={4}>
+            <Text fontWeight="bold" fontSize="xl">
+              投資金額から株数計算スール
+            </Text>
+            <InputGroup>
               <Controller
                 name="investmentAmount"
                 control={control}
                 render={({ field }) => (
                   <Flex>
                     <Center>
-                      <Text w={20} textAlign="right">
-                        投資金額：
-                      </Text>
+                      <Text w={20}>投資金額</Text>
                       <NumberInput
                         value={field.value}
-                        onChange={(value) =>
-                          handleInvestmentAmountChange(value)
-                        }
+                        onChange={field.onChange}
                       >
-                        <NumberInputField {...field} />
+                        <NumberInputField maxW="170px" {...field} />
 
                         {showClearButton && (
                           <InputRightElement width="2.5rem">
@@ -119,29 +111,34 @@ const App = () => {
               />
               <InputRightAddon children="円" />
             </InputGroup>
-            <InputGroup justifyContent="center" gap={1}>
-              <Button width="100px" onClick={() => addAmount(100000)}>
+            <InputGroup gap={1}>
+              <Button width="72px" size="sm" onClick={() => addAmount(10000)}>
+                +1万
+              </Button>
+              <Button width="72px" size="sm" onClick={() => addAmount(100000)}>
                 +10万
               </Button>
-              <Button width="100px" onClick={() => addAmount(1000000)}>
+              <Button width="72px" size="sm" onClick={() => addAmount(1000000)}>
                 +100万
               </Button>
-              <Button width="100px" onClick={() => addAmount(10000000)}>
+              <Button
+                width="72px"
+                size="sm"
+                onClick={() => addAmount(10000000)}
+              >
                 +1000万
               </Button>
             </InputGroup>
-            <InputGroup justifyContent="center">
+            <InputGroup>
               <Controller
                 name="stockPrice"
                 control={control}
                 render={({ field }) => (
                   <Flex>
                     <Center>
-                      <Text w={20} textAlign="right">
-                        株価：
-                      </Text>
+                      <Text w={20}>株価</Text>
                       <NumberInput defaultValue={0}>
-                        <NumberInputField {...field} />
+                        <NumberInputField maxW="170px" {...field} />
                       </NumberInput>
                     </Center>
                   </Flex>
@@ -149,16 +146,12 @@ const App = () => {
               />
               <InputRightAddon children="円" />
             </InputGroup>
-            <Button colorScheme="blue" type="submit">
+            <Button w="100px" colorScheme="blue" type="submit">
               株数計算
             </Button>
-          </VStack>
+          </Stack>
         </form>
-        {result && (
-          <Text textAlign="center" mt={4}>
-            {result}
-          </Text>
-        )}
+        {result && <Text mt={4}>{result}</Text>}
       </Box>
     </ChakraProvider>
   );
