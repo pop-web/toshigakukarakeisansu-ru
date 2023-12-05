@@ -30,7 +30,7 @@ const App = () => {
     },
   });
   const [result, setResult] = useState("");
-  const [showClearButton, setShowClearButton] = useState(false);
+  const [showClearButton] = useState(false);
   const addAmount = (amount: number) => {
     const currentAmount = getValues("investmentAmount");
     setValue("investmentAmount", currentAmount + amount);
