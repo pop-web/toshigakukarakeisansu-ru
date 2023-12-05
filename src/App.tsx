@@ -14,21 +14,21 @@ import {
 import { useForm, Controller } from "react-hook-form";
 
 type FormData = {
-  stockPrice: number | null;
-  investmentAmount: number | null;
+  stockPrice?: number;
+  investmentAmount?: number;
 };
 
 const App = () => {
   const { control, handleSubmit } = useForm<FormData>({
     defaultValues: {
-      stockPrice: null,
-      investmentAmount: null,
+      stockPrice: undefined,
+      investmentAmount: undefined,
     },
   });
   const [result, setResult] = useState("");
 
   const onSubmit = (data: FormData) => {
-    if (data.stockPrice === null || data.investmentAmount === null) {
+    if (!data.stockPrice || !data.investmentAmount) {
       setResult("株価と投資金額を入力してください。");
       return;
     }
