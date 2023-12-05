@@ -14,25 +14,39 @@ import {
 import { useForm, Controller } from "react-hook-form";
 
 type FormData = {
-  stockPrice: number;
-  investmentAmount: number;
+  stockPrice: number | null;
+  investmentAmount: number | null;
 };
 
 const App = () => {
   const { control, handleSubmit } = useForm<FormData>({
     defaultValues: {
-      stockPrice: 0,
-      investmentAmount: 0,
+      stockPrice: null,
+      investmentAmount: null,
     },
   });
   const [result, setResult] = useState("");
 
   const onSubmit = (data: FormData) => {
-    const unitShares = 100; // 単元株を固定値として設定
+    if (data.stockPrice === null || data.investmentAmount === null) {
+      setResult("株価と投資金額を入力してください。");
+      return;
+    }
+
+    if (isNaN(data.stockPrice) || data.stockPrice <= 0) {
+      setResult("株価は半角数値でなければなりません。");
+      return;
+    }
+
+    if (isNaN(data.investmentAmount) || data.investmentAmount <= 0) {
+      setResult("投資金額は半角数値でなければなりません。");
+      return;
+    }
+
+    const unitShares = 100;
     const stockPrice = parseFloat(data.stockPrice.toString().replace(/,/g, ""));
     const investmentAmount =
-      parseFloat(data.investmentAmount.toString().replace(/,/g, "")) * 10000; // 万円単位を円単位に変換
-
+      parseFloat(data.investmentAmount.toString().replace(/,/g, "")) * 10000;
     if (stockPrice > 0 && investmentAmount > 0) {
       const totalShares = Math.floor(investmentAmount / stockPrice);
       const purchasableShares =
@@ -75,7 +89,7 @@ const App = () => {
                   <Flex>
                     <Center>
                       <Text w={20}>投資金額</Text>
-                      <Input {...field} maxW="170px" />
+                      <Input {...field} maxW="100px" />
                     </Center>
                   </Flex>
                 )}
@@ -90,7 +104,7 @@ const App = () => {
                   <Flex>
                     <Center>
                       <Text w={20}>株価</Text>
-                      <Input {...field} maxW="170px" />{" "}
+                      <Input {...field} maxW="115px" />
                     </Center>
                   </Flex>
                 )}
