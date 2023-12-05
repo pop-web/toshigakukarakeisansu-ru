@@ -23,7 +23,7 @@ type FormData = {
 };
 
 const App = () => {
-  const { control, handleSubmit, setValue, getValues } = useForm<FormData>({
+  const { control, handleSubmit, setValue } = useForm<FormData>({
     defaultValues: {
       stockPrice: 0,
       investmentAmount: 0,
@@ -31,10 +31,6 @@ const App = () => {
   });
   const [result, setResult] = useState("");
   const [showClearButton] = useState(false);
-  const addAmount = (amount: number) => {
-    const currentAmount = getValues("investmentAmount");
-    setValue("investmentAmount", currentAmount + amount);
-  };
 
   const onSubmit = (data: FormData) => {
     const unitShares = 100; // 単元株を固定値として設定
@@ -53,15 +49,15 @@ const App = () => {
       if (purchasableShares > 0) {
         const requiredInvestment = purchasableShares * stockPrice; // 必要な投資金額の計算
         setResult(
-          `購入可能株数： ${purchasableShares} 株（投資金額： ${requiredInvestment}円）`
+          `購入可能株数は、${purchasableShares.toLocaleString()}株です。\n投資金額は、${requiredInvestment.toLocaleString()}円となります。`
         );
       } else {
         setResult("投資金額が足りないため、株を購入することができません。");
       }
-    } else if (stockPrice <= 0) {
-      setResult("株価を正しく入力してください。");
     } else if (investmentAmount <= 0) {
       setResult("投資金額を正しく入力してください。");
+    } else if (stockPrice <= 0) {
+      setResult("株価を正しく入力してください。");
     }
   };
 
@@ -77,6 +73,9 @@ const App = () => {
             <Text fontWeight="bold" fontSize="xl">
               投資金額から株数計算スール
             </Text>
+            <Text fontSize="sm">
+              ※株数は<b>100株単位</b>で計算されます。
+            </Text>
             <InputGroup>
               <Controller
                 name="investmentAmount"
@@ -85,10 +84,7 @@ const App = () => {
                   <Flex>
                     <Center>
                       <Text w={20}>投資金額</Text>
-                      <NumberInput
-                        value={field.value}
-                        onChange={field.onChange}
-                      >
+                      <NumberInput>
                         <NumberInputField maxW="170px" {...field} />
 
                         {showClearButton && (
@@ -111,24 +107,6 @@ const App = () => {
               />
               <InputRightAddon children="円" />
             </InputGroup>
-            <InputGroup gap={1}>
-              <Button width="72px" size="sm" onClick={() => addAmount(10000)}>
-                +1万
-              </Button>
-              <Button width="72px" size="sm" onClick={() => addAmount(100000)}>
-                +10万
-              </Button>
-              <Button width="72px" size="sm" onClick={() => addAmount(1000000)}>
-                +100万
-              </Button>
-              <Button
-                width="72px"
-                size="sm"
-                onClick={() => addAmount(10000000)}
-              >
-                +1000万
-              </Button>
-            </InputGroup>
             <InputGroup>
               <Controller
                 name="stockPrice"
@@ -137,7 +115,7 @@ const App = () => {
                   <Flex>
                     <Center>
                       <Text w={20}>株価</Text>
-                      <NumberInput defaultValue={0}>
+                      <NumberInput>
                         <NumberInputField maxW="170px" {...field} />
                       </NumberInput>
                     </Center>
@@ -151,7 +129,11 @@ const App = () => {
             </Button>
           </Stack>
         </form>
-        {result && <Text mt={4}>{result}</Text>}
+        {result && (
+          <Text mt={4} whiteSpace="pre-wrap">
+            {result}
+          </Text>
+        )}
       </Box>
     </ChakraProvider>
   );
