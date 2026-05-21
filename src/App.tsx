@@ -398,7 +398,7 @@ const App = () => {
                   bgClip="text"
                   lineHeight="1.1"
                 >
-                  株数計算
+                  投資金額から株数計算
                   <Box as="span" fontWeight="black">
                     スール
                   </Box>
