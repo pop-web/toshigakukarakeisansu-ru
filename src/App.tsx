@@ -390,7 +390,28 @@ const App = () => {
           <Box bg="white" p={{ base: 5, md: 8 }} borderRadius="xl" boxShadow="md">
             <Stack spacing={5}>
               <Box>
-                <Heading size="md">投資金額から株数計算スール</Heading>
+                <Heading
+                  size="lg"
+                  fontWeight="black"
+                  letterSpacing="tight"
+                  bgGradient="linear(to-r, #1e40af, #7c3aed, #ec4899)"
+                  bgClip="text"
+                  lineHeight="1.1"
+                >
+                  株数計算
+                  <Box as="span" fontWeight="black">
+                    スール
+                  </Box>
+                  <Box
+                    as="span"
+                    fontSize="0.7em"
+                    fontWeight="extrabold"
+                    letterSpacing="wider"
+                    ml={1}
+                  >
+                    スルスル
+                  </Box>
+                </Heading>
                 <Text mt={1} fontSize="sm" color="gray.600">
                   日本株は100株単位、米国株は1株単位で計算します。
                 </Text>
