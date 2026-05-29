@@ -3,6 +3,7 @@ import {
   ChakraProvider,
   Box,
   Button,
+  ButtonGroup,
   Text,
   InputRightAddon,
   InputGroup,
@@ -37,6 +38,7 @@ type JpFormData = {
   stockPrice?: number;
   investmentAmount?: number;
   ma20DistancePercent?: number;
+  ma20Price?: number;
 };
 
 // ルール: 投資額(万円) = MIN(500, 750 / 20MAとの距離%)
@@ -59,6 +61,8 @@ type CalcResult =
       kind: "jp-success";
       shares: number;
       requiredInvestment: number;
+      stockPrice: number;
+      distancePct?: number;
     }
   | {
       kind: "us-success";
@@ -122,20 +126,43 @@ const JpStockForm = ({
 }: {
   setResult: (r: CalcResult | null) => void;
 }) => {
+  const [inputMode, setInputMode] = useState<"distance" | "ma20Price">(
+    "distance"
+  );
+
   const { control, handleSubmit, setValue, watch } = useForm<JpFormData>({
     defaultValues: {
       stockPrice: undefined,
       investmentAmount: undefined,
       ma20DistancePercent: undefined,
+      ma20Price: undefined,
     },
   });
 
+  const watchedStockPrice = watch("stockPrice");
+  const watchedMa20Price = watch("ma20Price");
   const distancePct = parseNum(watch("ma20DistancePercent"));
   const overEntryCondition = isFinite(distancePct) && distancePct > 5;
+
+  // 20MA価格モード: 株価とMA20価格から距離%と投資額を自動算出
+  useEffect(() => {
+    if (inputMode !== "ma20Price") return;
+    const sp = parseNum(watchedStockPrice);
+    const ma = parseNum(watchedMa20Price);
+    if (!isFinite(sp) || !isFinite(ma) || sp <= 0 || ma <= 0) return;
+    const dist = ((sp - ma) / sp) * 100;
+    const rounded = Math.round(dist * 100) / 100;
+    setValue("ma20DistancePercent", rounded, { shouldDirty: true });
+    const suggested = computeSuggestedInvestmentMan(rounded);
+    if (isFinite(suggested)) {
+      setValue("investmentAmount", suggested, { shouldDirty: true });
+    }
+  }, [inputMode, watchedStockPrice, watchedMa20Price, setValue]);
 
   const onSubmit = (data: JpFormData) => {
     const stockPrice = parseNum(data.stockPrice);
     const investmentAmount = parseNum(data.investmentAmount) * 10000;
+    const distPct = parseNum(data.ma20DistancePercent);
 
     if (!isFinite(stockPrice) || stockPrice <= 0) {
       setResult({ kind: "error", message: "株価は正の数値で入力してください。" });
@@ -158,6 +185,8 @@ const JpStockForm = ({
         kind: "jp-success",
         shares: purchasableShares,
         requiredInvestment: purchasableShares * stockPrice,
+        stockPrice,
+        distancePct: isFinite(distPct) && distPct > 0 ? distPct : undefined,
       });
     } else {
       setResult({
@@ -171,6 +200,30 @@ const JpStockForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={4}>
+        <Box>
+          <Text fontSize="xs" color="gray.600" mb={2} fontWeight="bold">
+            入力方法
+          </Text>
+          <ButtonGroup size="sm" isAttached variant="outline" w="full">
+            <Button
+              flex="1"
+              colorScheme={inputMode === "distance" ? "blue" : "gray"}
+              variant={inputMode === "distance" ? "solid" : "outline"}
+              onClick={() => setInputMode("distance")}
+            >
+              距離%で入力
+            </Button>
+            <Button
+              flex="1"
+              colorScheme={inputMode === "ma20Price" ? "blue" : "gray"}
+              variant={inputMode === "ma20Price" ? "solid" : "outline"}
+              onClick={() => setInputMode("ma20Price")}
+            >
+              20MA価格で入力
+            </Button>
+          </ButtonGroup>
+        </Box>
+
         <Controller
           name="ma20DistancePercent"
           control={control}
@@ -178,6 +231,11 @@ const JpStockForm = ({
             <FormControl>
               <FormLabel fontSize="sm" mb={1}>
                 20MAとの距離
+                {inputMode === "ma20Price" && (
+                  <Box as="span" ml={2} fontSize="xs" color="gray.500">
+                    （自動算出）
+                  </Box>
+                )}
               </FormLabel>
               <InputGroup>
                 <Input
@@ -185,8 +243,11 @@ const JpStockForm = ({
                   value={field.value ?? ""}
                   inputMode="decimal"
                   placeholder="例: 2.5"
+                  isReadOnly={inputMode === "ma20Price"}
+                  bg={inputMode === "ma20Price" ? "gray.50" : "white"}
                   onChange={(e) => {
                     field.onChange(e);
+                    if (inputMode !== "distance") return;
                     const pct = parseFloat(e.target.value);
                     const suggested = computeSuggestedInvestmentMan(pct);
                     if (isFinite(suggested)) {
@@ -198,9 +259,11 @@ const JpStockForm = ({
                 />
                 <InputRightAddon>%</InputRightAddon>
               </InputGroup>
-              <Text fontSize="xs" color="gray.500" mt={1}>
-                入力すると下の投資金額が自動入力されます（手動で上書きも可）
-              </Text>
+              {inputMode === "distance" && (
+                <Text fontSize="xs" color="gray.500" mt={1}>
+                  入力すると下の投資金額が自動入力されます（手動で上書きも可）
+                </Text>
+              )}
               {overEntryCondition && (
                 <Text fontSize="xs" color="orange.600" mt={1} fontWeight="bold">
                   ⚠️ 距離 5% 超え。エントリー条件外です。
@@ -209,6 +272,32 @@ const JpStockForm = ({
             </FormControl>
           )}
         />
+
+        {inputMode === "ma20Price" && (
+          <Controller
+            name="ma20Price"
+            control={control}
+            render={({ field }) => (
+              <FormControl>
+                <FormLabel fontSize="sm" mb={1}>
+                  20MA価格
+                </FormLabel>
+                <InputGroup>
+                  <Input
+                    {...field}
+                    value={field.value ?? ""}
+                    inputMode="decimal"
+                    placeholder="例: 1463"
+                  />
+                  <InputRightAddon>円</InputRightAddon>
+                </InputGroup>
+                <Text fontSize="xs" color="gray.500" mt={1}>
+                  株価とMA20価格から距離%・投資金額を自動算出します
+                </Text>
+              </FormControl>
+            )}
+          />
+        )}
         <Controller
           name="investmentAmount"
           control={control}
@@ -474,22 +563,65 @@ const App = () => {
                 <>
                   <Divider />
                   {result.kind === "jp-success" && (
-                    <SimpleGrid columns={2} spacing={3}>
-                      <Stat bg="blue.50" p={3} borderRadius="md">
-                        <StatLabel color="blue.700">購入可能株数</StatLabel>
-                        <StatNumber color="blue.700">
-                          {result.shares.toLocaleString()}
-                        </StatNumber>
-                        <StatHelpText mb={0}>株</StatHelpText>
-                      </Stat>
-                      <Stat bg="green.50" p={3} borderRadius="md">
-                        <StatLabel color="green.700">実際の投資金額</StatLabel>
-                        <StatNumber color="green.700">
-                          {result.requiredInvestment.toLocaleString()}
-                        </StatNumber>
-                        <StatHelpText mb={0}>円</StatHelpText>
-                      </Stat>
-                    </SimpleGrid>
+                    <Stack spacing={3}>
+                      <SimpleGrid columns={2} spacing={3}>
+                        <Stat bg="blue.50" p={3} borderRadius="md">
+                          <StatLabel color="blue.700">購入可能株数</StatLabel>
+                          <StatNumber color="blue.700">
+                            {result.shares.toLocaleString()}
+                          </StatNumber>
+                          <StatHelpText mb={0}>株</StatHelpText>
+                        </Stat>
+                        <Stat bg="green.50" p={3} borderRadius="md">
+                          <StatLabel color="green.700">実際の投資金額</StatLabel>
+                          <StatNumber color="green.700">
+                            {result.requiredInvestment.toLocaleString()}
+                          </StatNumber>
+                          <StatHelpText mb={0}>円</StatHelpText>
+                        </Stat>
+                      </SimpleGrid>
+                      {result.distancePct !== undefined && (() => {
+                        const dist = result.distancePct;
+                        const stopLossPrice = result.stockPrice * (1 - dist / 100);
+                        const stopLossAmount =
+                          result.shares * (result.stockPrice - stopLossPrice);
+                        const takeProfitPct = dist * 2;
+                        const takeProfitPrice =
+                          result.stockPrice * (1 + takeProfitPct / 100);
+                        const takeProfitAmount =
+                          result.shares * (takeProfitPrice - result.stockPrice);
+                        const rr =
+                          stopLossAmount > 0
+                            ? takeProfitAmount / stopLossAmount
+                            : 0;
+                        return (
+                          <SimpleGrid columns={2} spacing={3}>
+                            <Stat bg="red.50" p={3} borderRadius="md">
+                              <StatLabel color="red.700">🛑 損切り価格</StatLabel>
+                              <StatNumber color="red.700" fontSize="lg">
+                                ¥{Math.round(stopLossPrice).toLocaleString()}
+                              </StatNumber>
+                              <StatHelpText mb={0} fontSize="xs">
+                                −{dist.toFixed(2)}% ／ 損切り額 ¥
+                                {Math.round(stopLossAmount).toLocaleString()}
+                              </StatHelpText>
+                            </Stat>
+                            <Stat bg="purple.50" p={3} borderRadius="md">
+                              <StatLabel color="purple.700">🎯 利確目標</StatLabel>
+                              <StatNumber color="purple.700" fontSize="lg">
+                                ¥{Math.round(takeProfitPrice).toLocaleString()}
+                              </StatNumber>
+                              <StatHelpText mb={0} fontSize="xs">
+                                +{takeProfitPct.toFixed(2)}% ／ 利確額 ¥
+                                {Math.round(takeProfitAmount).toLocaleString()}
+                                {" ／ "}
+                                RR {rr.toFixed(2)}
+                              </StatHelpText>
+                            </Stat>
+                          </SimpleGrid>
+                        );
+                      })()}
+                    </Stack>
                   )}
                   {result.kind === "us-success" && (
                     <Stack spacing={3}>
