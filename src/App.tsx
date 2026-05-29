@@ -817,88 +817,13 @@ const UsStockForm = ({
   );
 };
 
-// ---- 結果からコピペ用テキストを生成 ----
+// ---- 結果からコピペ用テキストを生成（株数のみ・発注画面貼付用） ----
 const buildCopyText = (
   result: CalcResult,
-  settings: Settings
+  _settings: Settings
 ): string | null => {
-  const today = new Date();
-  const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
-  const fmtY = (n: number) => `¥${Math.round(n).toLocaleString()}`;
-  const fmtD = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  const totalFundsYen =
-    settings.totalFundsManYen !== undefined
-      ? settings.totalFundsManYen * 10000
-      : undefined;
-
-  if (result.kind === "jp-success") {
-    const header = result.symbol ? `${dateStr} ${result.symbol}` : dateStr;
-    const lines = [
-      header,
-      "─────────────────",
-      `エントリー  ${fmtY(result.stockPrice)} × ${result.shares.toLocaleString()}株`,
-      `           = ${fmtY(result.requiredInvestment)}`,
-    ];
-    if (result.distancePct !== undefined) {
-      const d = result.distancePct;
-      const sl = result.stockPrice * (1 - d / 100);
-      const slAmt = result.shares * (result.stockPrice - sl);
-      const tpPct = d * 2;
-      const tp = result.stockPrice * (1 + tpPct / 100);
-      const tpAmt = result.shares * (tp - result.stockPrice);
-      const rr = slAmt > 0 ? tpAmt / slAmt : 0;
-      lines.push(
-        "",
-        `20MA距離   ${d.toFixed(2)}%`,
-        `🛑 損切り  ${fmtY(sl)} (-${d.toFixed(2)}% / -${fmtY(slAmt)})`,
-        `🎯 利確    ${fmtY(tp)} (+${tpPct.toFixed(2)}% / +${fmtY(tpAmt)})`,
-        `RR比      ${rr.toFixed(2)}`
-      );
-    }
-    if (totalFundsYen) {
-      const ratio = (result.requiredInvestment / totalFundsYen) * 100;
-      lines.push(
-        "",
-        `総資金比率 ${ratio.toFixed(1)}% (総資金 ${settings.totalFundsManYen?.toLocaleString()}万円)`
-      );
-    }
-    return lines.join("\n");
-  }
-
-  if (result.kind === "us-success") {
-    const header = result.symbol ? `${dateStr} ${result.symbol}` : dateStr;
-    const lines = [
-      header,
-      "─────────────────",
-      `エントリー  ${fmtD(result.stockPriceUsd)} × ${result.shares.toLocaleString()}株`,
-      `           = ${fmtD(result.requiredInvestmentUsd)}`,
-      `円換算     ≈${fmtY(result.requiredInvestmentJpy)}`,
-      `レート     1USD = ${result.exchangeRate.toFixed(2)}円`,
-    ];
-    if (result.distancePct !== undefined) {
-      const d = result.distancePct;
-      const sl = result.stockPriceUsd * (1 - d / 100);
-      const slAmt = result.shares * (result.stockPriceUsd - sl);
-      const tpPct = d * 2;
-      const tp = result.stockPriceUsd * (1 + tpPct / 100);
-      const tpAmt = result.shares * (tp - result.stockPriceUsd);
-      const rr = slAmt > 0 ? tpAmt / slAmt : 0;
-      lines.push(
-        "",
-        `20MA距離   ${d.toFixed(2)}%`,
-        `🛑 損切り  ${fmtD(sl)} (-${d.toFixed(2)}% / -${fmtD(slAmt)} ≈-${fmtY(slAmt * result.exchangeRate)})`,
-        `🎯 利確    ${fmtD(tp)} (+${tpPct.toFixed(2)}% / +${fmtD(tpAmt)} ≈+${fmtY(tpAmt * result.exchangeRate)})`,
-        `RR比      ${rr.toFixed(2)}`
-      );
-    }
-    if (totalFundsYen) {
-      const ratio = (result.requiredInvestmentJpy / totalFundsYen) * 100;
-      lines.push(
-        "",
-        `総資金比率 ${ratio.toFixed(1)}% (総資金 ${settings.totalFundsManYen?.toLocaleString()}万円)`
-      );
-    }
-    return lines.join("\n");
+  if (result.kind === "jp-success" || result.kind === "us-success") {
+    return String(result.shares);
   }
   return null;
 };
