@@ -61,7 +61,7 @@ type JpFormData = {
   symbol?: string;
 };
 
-// ルール: 投資額(万円) = MIN(500, 750 / 20MAとの距離%)
+// ルール: 投資額(万円) = MIN(500, 750 / 損切りまでの距離%)
 const JP_LOSS_CUT_YEN = 75_000;
 const JP_INVESTMENT_CAP_MAN = 500;
 const computeSuggestedInvestmentMan = (distancePct: number): number => {
@@ -346,7 +346,7 @@ const JpStockForm = ({
               variant={inputMode === "ma20Price" ? "solid" : "outline"}
               onClick={() => setInputMode("ma20Price")}
             >
-              20MA価格で入力
+              損切り価格で入力
             </Button>
           </ButtonGroup>
         </Box>
@@ -357,7 +357,7 @@ const JpStockForm = ({
           render={({ field }) => (
             <FormControl>
               <FormLabel fontSize="sm" mb={1}>
-                20MAとの距離
+                損切りまでの距離
                 {inputMode === "ma20Price" && (
                   <Box as="span" ml={2} fontSize="xs" color="gray.500">
                     （自動算出）
@@ -407,7 +407,7 @@ const JpStockForm = ({
             render={({ field }) => (
               <FormControl>
                 <FormLabel fontSize="sm" mb={1}>
-                  20MA価格
+                  損切り価格
                 </FormLabel>
                 <InputGroup>
                   <Input
@@ -419,7 +419,7 @@ const JpStockForm = ({
                   <InputRightAddon>円</InputRightAddon>
                 </InputGroup>
                 <Text fontSize="xs" color="gray.500" mt={1}>
-                  株価とMA20価格から距離%・投資金額を自動算出します
+                  20MAそのまま、または少し下（ヒゲ対策）でOK。距離%・投資金額を自動算出します。
                 </Text>
               </FormControl>
             )}
@@ -647,7 +647,7 @@ const UsStockForm = ({
               variant={inputMode === "ma20Price" ? "solid" : "outline"}
               onClick={() => setInputMode("ma20Price")}
             >
-              20MA価格で入力
+              損切り価格で入力
             </Button>
           </ButtonGroup>
         </Box>
@@ -658,7 +658,7 @@ const UsStockForm = ({
           render={({ field }) => (
             <FormControl>
               <FormLabel fontSize="sm" mb={1}>
-                20MAとの距離
+                損切りまでの距離
                 {inputMode === "ma20Price" && (
                   <Box as="span" ml={2} fontSize="xs" color="gray.500">
                     （自動算出）
@@ -708,7 +708,7 @@ const UsStockForm = ({
             render={({ field }) => (
               <FormControl>
                 <FormLabel fontSize="sm" mb={1}>
-                  20MA価格
+                  損切り価格
                 </FormLabel>
                 <InputGroup>
                   <Input
@@ -720,7 +720,7 @@ const UsStockForm = ({
                   <InputRightAddon>USD</InputRightAddon>
                 </InputGroup>
                 <Text fontSize="xs" color="gray.500" mt={1}>
-                  株価とMA20価格から距離%・投資金額を自動算出します
+                  20MAそのまま、または少し下（ヒゲ対策）でOK。距離%・投資金額を自動算出します。
                 </Text>
               </FormControl>
             )}
