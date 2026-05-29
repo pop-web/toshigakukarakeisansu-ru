@@ -67,6 +67,8 @@ type UsFormData = {
   investmentAmount?: number;
   exchangeRate?: number;
   symbol?: string;
+  ma20DistancePercent?: number;
+  ma20PriceUsd?: number;
 };
 
 // ---- 履歴 / 設定 ----
@@ -152,6 +154,7 @@ type CalcResult =
       requiredInvestmentJpy: number;
       exchangeRate: number;
       symbol?: string;
+      distancePct?: number;
     }
   | {
       kind: "insufficient";
@@ -469,6 +472,10 @@ const UsStockForm = ({
   setResult: (r: CalcResult | null) => void;
   addHistory: (e: Omit<HistoryEntry, "id" | "timestamp">) => void;
 }) => {
+  const [inputMode, setInputMode] = useState<"distance" | "ma20Price">(
+    "distance"
+  );
+
   const { rate, loading, error, refetch, lastFetched } = useUsdJpyRate();
   const { control, handleSubmit, setValue, watch } = useForm<UsFormData>({
     defaultValues: {
@@ -476,6 +483,8 @@ const UsStockForm = ({
       investmentAmount: undefined,
       exchangeRate: undefined,
       symbol: "",
+      ma20DistancePercent: undefined,
+      ma20PriceUsd: undefined,
     },
   });
 
@@ -485,6 +494,27 @@ const UsStockForm = ({
       setValue("exchangeRate", rate);
     }
   }, [rate, currentRate, setValue]);
+
+  // 20MA価格モード(US): 株価(USD)とMA20価格(USD)から距離%と投資額を自動算出
+  const watchedStockPriceUsd = watch("stockPriceUsd");
+  const watchedMa20PriceUsd = watch("ma20PriceUsd");
+  const distancePctUs = parseNum(watch("ma20DistancePercent"));
+  const overEntryConditionUs =
+    isFinite(distancePctUs) && distancePctUs > 5;
+
+  useEffect(() => {
+    if (inputMode !== "ma20Price") return;
+    const sp = parseNum(watchedStockPriceUsd);
+    const ma = parseNum(watchedMa20PriceUsd);
+    if (!isFinite(sp) || !isFinite(ma) || sp <= 0 || ma <= 0) return;
+    const dist = ((sp - ma) / sp) * 100;
+    const rounded = Math.round(dist * 100) / 100;
+    setValue("ma20DistancePercent", rounded, { shouldDirty: true });
+    const suggested = computeSuggestedInvestmentMan(rounded);
+    if (isFinite(suggested)) {
+      setValue("investmentAmount", suggested, { shouldDirty: true });
+    }
+  }, [inputMode, watchedStockPriceUsd, watchedMa20PriceUsd, setValue]);
 
   const onSubmit = (data: UsFormData) => {
     const stockPriceUsd = parseNum(data.stockPriceUsd);
@@ -522,6 +552,8 @@ const UsStockForm = ({
     if (purchasableShares > 0) {
       const requiredInvestmentUsd = purchasableShares * stockPriceUsd;
       const requiredInvestmentJpy = requiredInvestmentUsd * exchangeRate;
+      const distPct = parseNum(data.ma20DistancePercent);
+      const finalDist = isFinite(distPct) && distPct > 0 ? distPct : undefined;
       setResult({
         kind: "us-success",
         shares: purchasableShares,
@@ -530,6 +562,7 @@ const UsStockForm = ({
         requiredInvestmentJpy,
         exchangeRate,
         symbol,
+        distancePct: finalDist,
       });
       addHistory({
         market: "US",
@@ -539,6 +572,7 @@ const UsStockForm = ({
         investmentAmountJpy: requiredInvestmentJpy,
         investmentAmountUsd: requiredInvestmentUsd,
         exchangeRate,
+        distancePct: finalDist,
       });
     } else {
       setResult({
@@ -585,6 +619,106 @@ const UsStockForm = ({
             </FormControl>
           )}
         />
+
+        <Box>
+          <Text fontSize="xs" color="gray.600" mb={2} fontWeight="bold">
+            入力方法
+          </Text>
+          <ButtonGroup size="sm" isAttached variant="outline" w="full">
+            <Button
+              flex="1"
+              colorScheme={inputMode === "distance" ? "blue" : "gray"}
+              variant={inputMode === "distance" ? "solid" : "outline"}
+              onClick={() => setInputMode("distance")}
+            >
+              距離%で入力
+            </Button>
+            <Button
+              flex="1"
+              colorScheme={inputMode === "ma20Price" ? "blue" : "gray"}
+              variant={inputMode === "ma20Price" ? "solid" : "outline"}
+              onClick={() => setInputMode("ma20Price")}
+            >
+              20MA価格で入力
+            </Button>
+          </ButtonGroup>
+        </Box>
+
+        <Controller
+          name="ma20DistancePercent"
+          control={control}
+          render={({ field }) => (
+            <FormControl>
+              <FormLabel fontSize="sm" mb={1}>
+                20MAとの距離
+                {inputMode === "ma20Price" && (
+                  <Box as="span" ml={2} fontSize="xs" color="gray.500">
+                    （自動算出）
+                  </Box>
+                )}
+              </FormLabel>
+              <InputGroup>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  inputMode="decimal"
+                  placeholder="例: 2.5"
+                  isReadOnly={inputMode === "ma20Price"}
+                  bg={inputMode === "ma20Price" ? "gray.50" : "white"}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    if (inputMode !== "distance") return;
+                    const pct = parseFloat(e.target.value);
+                    const suggested = computeSuggestedInvestmentMan(pct);
+                    if (isFinite(suggested)) {
+                      setValue("investmentAmount", suggested, {
+                        shouldDirty: true,
+                      });
+                    }
+                  }}
+                />
+                <InputRightAddon>%</InputRightAddon>
+              </InputGroup>
+              {inputMode === "distance" && (
+                <Text fontSize="xs" color="gray.500" mt={1}>
+                  入力すると下の投資金額が自動入力されます（手動で上書きも可）
+                </Text>
+              )}
+              {overEntryConditionUs && (
+                <Text fontSize="xs" color="orange.600" mt={1} fontWeight="bold">
+                  ⚠️ 距離 5% 超え。エントリー条件外です。
+                </Text>
+              )}
+            </FormControl>
+          )}
+        />
+
+        {inputMode === "ma20Price" && (
+          <Controller
+            name="ma20PriceUsd"
+            control={control}
+            render={({ field }) => (
+              <FormControl>
+                <FormLabel fontSize="sm" mb={1}>
+                  20MA価格
+                </FormLabel>
+                <InputGroup>
+                  <Input
+                    {...field}
+                    value={field.value ?? ""}
+                    inputMode="decimal"
+                    placeholder="例: 146.25"
+                  />
+                  <InputRightAddon>USD</InputRightAddon>
+                </InputGroup>
+                <Text fontSize="xs" color="gray.500" mt={1}>
+                  株価とMA20価格から距離%・投資金額を自動算出します
+                </Text>
+              </FormControl>
+            )}
+          />
+        )}
+
         <Controller
           name="investmentAmount"
           control={control}
@@ -733,6 +867,22 @@ const buildCopyText = (
       `円換算     ≈${fmtY(result.requiredInvestmentJpy)}`,
       `レート     1USD = ${result.exchangeRate.toFixed(2)}円`,
     ];
+    if (result.distancePct !== undefined) {
+      const d = result.distancePct;
+      const sl = result.stockPriceUsd * (1 - d / 100);
+      const slAmt = result.shares * (result.stockPriceUsd - sl);
+      const tpPct = d * 2;
+      const tp = result.stockPriceUsd * (1 + tpPct / 100);
+      const tpAmt = result.shares * (tp - result.stockPriceUsd);
+      const rr = slAmt > 0 ? tpAmt / slAmt : 0;
+      lines.push(
+        "",
+        `20MA距離   ${d.toFixed(2)}%`,
+        `🛑 損切り  ${fmtD(sl)} (-${d.toFixed(2)}% / -${fmtD(slAmt)} ≈-${fmtY(slAmt * result.exchangeRate)})`,
+        `🎯 利確    ${fmtD(tp)} (+${tpPct.toFixed(2)}% / +${fmtD(tpAmt)} ≈+${fmtY(tpAmt * result.exchangeRate)})`,
+        `RR比      ${rr.toFixed(2)}`
+      );
+    }
     if (totalFundsYen) {
       const ratio = (result.requiredInvestmentJpy / totalFundsYen) * 100;
       lines.push(
@@ -1102,6 +1252,53 @@ const App = () => {
                           </StatHelpText>
                         </Stat>
                       </SimpleGrid>
+                      {result.distancePct !== undefined && (() => {
+                        const dist = result.distancePct;
+                        const stopLossUsd =
+                          result.stockPriceUsd * (1 - dist / 100);
+                        const stopLossAmountUsd =
+                          result.shares * (result.stockPriceUsd - stopLossUsd);
+                        const tpPct = dist * 2;
+                        const tpUsd = result.stockPriceUsd * (1 + tpPct / 100);
+                        const tpAmountUsd =
+                          result.shares * (tpUsd - result.stockPriceUsd);
+                        const rr =
+                          stopLossAmountUsd > 0
+                            ? tpAmountUsd / stopLossAmountUsd
+                            : 0;
+                        const fmtUsd = (n: number) =>
+                          n.toLocaleString(undefined, {
+                            maximumFractionDigits: 2,
+                          });
+                        const slAmtJpy = stopLossAmountUsd * result.exchangeRate;
+                        const tpAmtJpy = tpAmountUsd * result.exchangeRate;
+                        return (
+                          <SimpleGrid columns={2} spacing={3}>
+                            <Stat bg="red.50" p={3} borderRadius="md">
+                              <StatLabel color="red.700">🛑 損切り価格</StatLabel>
+                              <StatNumber color="red.700" fontSize="lg">
+                                ${fmtUsd(stopLossUsd)}
+                              </StatNumber>
+                              <StatHelpText mb={0} fontSize="xs">
+                                −{dist.toFixed(2)}% ／ 損切り額 ${fmtUsd(stopLossAmountUsd)}
+                                <br />
+                                (≈¥{Math.round(slAmtJpy).toLocaleString()})
+                              </StatHelpText>
+                            </Stat>
+                            <Stat bg="purple.50" p={3} borderRadius="md">
+                              <StatLabel color="purple.700">🎯 利確目標</StatLabel>
+                              <StatNumber color="purple.700" fontSize="lg">
+                                ${fmtUsd(tpUsd)}
+                              </StatNumber>
+                              <StatHelpText mb={0} fontSize="xs">
+                                +{tpPct.toFixed(2)}% ／ 利確額 ${fmtUsd(tpAmountUsd)}
+                                <br />
+                                (≈¥{Math.round(tpAmtJpy).toLocaleString()}) ／ RR {rr.toFixed(2)}
+                              </StatHelpText>
+                            </Stat>
+                          </SimpleGrid>
+                        );
+                      })()}
                       {ratioText(result.requiredInvestmentJpy) && (
                         <Text fontSize="xs" color="gray.600" textAlign="right">
                           {ratioText(result.requiredInvestmentJpy)}
