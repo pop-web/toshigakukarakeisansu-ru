@@ -30,8 +30,19 @@ import {
   IconButton,
   Spinner,
   Tooltip,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+  useToast,
+  Flex,
+  Badge,
 } from "@chakra-ui/react";
-import { RepeatIcon } from "@chakra-ui/icons";
+import { RepeatIcon, SettingsIcon, CopyIcon, DeleteIcon } from "@chakra-ui/icons";
 import { useForm, Controller } from "react-hook-form";
 
 type JpFormData = {
@@ -39,6 +50,7 @@ type JpFormData = {
   investmentAmount?: number;
   ma20DistancePercent?: number;
   ma20Price?: number;
+  symbol?: string;
 };
 
 // ルール: 投資額(万円) = MIN(500, 750 / 20MAとの距離%)
@@ -54,6 +66,73 @@ type UsFormData = {
   stockPriceUsd?: number;
   investmentAmount?: number;
   exchangeRate?: number;
+  symbol?: string;
+};
+
+// ---- 履歴 / 設定 ----
+type HistoryEntry = {
+  id: string;
+  timestamp: number;
+  market: "JP" | "US";
+  symbol?: string;
+  stockPrice: number;
+  shares: number;
+  investmentAmountJpy: number;
+  distancePct?: number;
+  exchangeRate?: number;
+  investmentAmountUsd?: number;
+};
+
+type Settings = {
+  totalFundsManYen?: number; // 総資金（万円）
+};
+
+const HISTORY_KEY = "suuru-history-v1";
+const SETTINGS_KEY = "suuru-settings-v1";
+const HISTORY_MAX = 100;
+
+const loadHistory = (): HistoryEntry[] => {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+const saveHistory = (entries: HistoryEntry[]) => {
+  try {
+    localStorage.setItem(
+      HISTORY_KEY,
+      JSON.stringify(entries.slice(0, HISTORY_MAX))
+    );
+  } catch {
+    // ignore quota errors
+  }
+};
+
+const loadSettings = (): Settings => {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+const saveSettings = (s: Settings) => {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  } catch {
+    // ignore
+  }
+};
+
+const formatDateSlash = (ts: number): string => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 };
 
 type CalcResult =
@@ -63,13 +142,16 @@ type CalcResult =
       requiredInvestment: number;
       stockPrice: number;
       distancePct?: number;
+      symbol?: string;
     }
   | {
       kind: "us-success";
       shares: number;
+      stockPriceUsd: number;
       requiredInvestmentUsd: number;
       requiredInvestmentJpy: number;
       exchangeRate: number;
+      symbol?: string;
     }
   | {
       kind: "insufficient";
@@ -123,8 +205,10 @@ const parseNum = (v: number | undefined): number => {
 
 const JpStockForm = ({
   setResult,
+  addHistory,
 }: {
   setResult: (r: CalcResult | null) => void;
+  addHistory: (e: Omit<HistoryEntry, "id" | "timestamp">) => void;
 }) => {
   const [inputMode, setInputMode] = useState<"distance" | "ma20Price">(
     "distance"
@@ -136,6 +220,7 @@ const JpStockForm = ({
       investmentAmount: undefined,
       ma20DistancePercent: undefined,
       ma20Price: undefined,
+      symbol: "",
     },
   });
 
@@ -163,6 +248,7 @@ const JpStockForm = ({
     const stockPrice = parseNum(data.stockPrice);
     const investmentAmount = parseNum(data.investmentAmount) * 10000;
     const distPct = parseNum(data.ma20DistancePercent);
+    const symbol = (data.symbol ?? "").trim() || undefined;
 
     if (!isFinite(stockPrice) || stockPrice <= 0) {
       setResult({ kind: "error", message: "株価は正の数値で入力してください。" });
@@ -181,12 +267,23 @@ const JpStockForm = ({
       Math.floor(totalShares / JP_UNIT_SHARES) * JP_UNIT_SHARES;
 
     if (purchasableShares > 0) {
+      const requiredInvestment = purchasableShares * stockPrice;
+      const finalDist = isFinite(distPct) && distPct > 0 ? distPct : undefined;
       setResult({
         kind: "jp-success",
         shares: purchasableShares,
-        requiredInvestment: purchasableShares * stockPrice,
+        requiredInvestment,
         stockPrice,
-        distancePct: isFinite(distPct) && distPct > 0 ? distPct : undefined,
+        distancePct: finalDist,
+        symbol,
+      });
+      addHistory({
+        market: "JP",
+        symbol,
+        stockPrice,
+        shares: purchasableShares,
+        investmentAmountJpy: requiredInvestment,
+        distancePct: finalDist,
       });
     } else {
       setResult({
@@ -200,6 +297,25 @@ const JpStockForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={4}>
+        <Controller
+          name="symbol"
+          control={control}
+          render={({ field }) => (
+            <FormControl>
+              <FormLabel fontSize="sm" mb={1}>
+                銘柄
+                <Box as="span" ml={2} fontSize="xs" color="gray.500">
+                  （任意）
+                </Box>
+              </FormLabel>
+              <Input
+                {...field}
+                value={field.value ?? ""}
+                placeholder="例: トヨタ自動車 (7203)"
+              />
+            </FormControl>
+          )}
+        />
         <Box>
           <Text fontSize="xs" color="gray.600" mb={2} fontWeight="bold">
             入力方法
@@ -348,8 +464,10 @@ const JpStockForm = ({
 
 const UsStockForm = ({
   setResult,
+  addHistory,
 }: {
   setResult: (r: CalcResult | null) => void;
+  addHistory: (e: Omit<HistoryEntry, "id" | "timestamp">) => void;
 }) => {
   const { rate, loading, error, refetch, lastFetched } = useUsdJpyRate();
   const { control, handleSubmit, setValue, watch } = useForm<UsFormData>({
@@ -357,6 +475,7 @@ const UsStockForm = ({
       stockPriceUsd: undefined,
       investmentAmount: undefined,
       exchangeRate: undefined,
+      symbol: "",
     },
   });
 
@@ -371,6 +490,7 @@ const UsStockForm = ({
     const stockPriceUsd = parseNum(data.stockPriceUsd);
     const investmentAmountJpy = parseNum(data.investmentAmount) * 10000;
     const exchangeRate = parseNum(data.exchangeRate);
+    const symbol = (data.symbol ?? "").trim() || undefined;
 
     if (!isFinite(stockPriceUsd) || stockPriceUsd <= 0) {
       setResult({
@@ -401,11 +521,23 @@ const UsStockForm = ({
 
     if (purchasableShares > 0) {
       const requiredInvestmentUsd = purchasableShares * stockPriceUsd;
+      const requiredInvestmentJpy = requiredInvestmentUsd * exchangeRate;
       setResult({
         kind: "us-success",
         shares: purchasableShares,
+        stockPriceUsd,
         requiredInvestmentUsd,
-        requiredInvestmentJpy: requiredInvestmentUsd * exchangeRate,
+        requiredInvestmentJpy,
+        exchangeRate,
+        symbol,
+      });
+      addHistory({
+        market: "US",
+        symbol,
+        stockPrice: stockPriceUsd,
+        shares: purchasableShares,
+        investmentAmountJpy: requiredInvestmentJpy,
+        investmentAmountUsd: requiredInvestmentUsd,
         exchangeRate,
       });
     } else {
@@ -434,6 +566,25 @@ const UsStockForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={4}>
+        <Controller
+          name="symbol"
+          control={control}
+          render={({ field }) => (
+            <FormControl>
+              <FormLabel fontSize="sm" mb={1}>
+                銘柄
+                <Box as="span" ml={2} fontSize="xs" color="gray.500">
+                  （任意）
+                </Box>
+              </FormLabel>
+              <Input
+                {...field}
+                value={field.value ?? ""}
+                placeholder="例: AAPL"
+              />
+            </FormControl>
+          )}
+        />
         <Controller
           name="investmentAmount"
           control={control}
@@ -524,8 +675,280 @@ const UsStockForm = ({
   );
 };
 
+// ---- 結果からコピペ用テキストを生成 ----
+const buildCopyText = (
+  result: CalcResult,
+  settings: Settings
+): string | null => {
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
+  const fmtY = (n: number) => `¥${Math.round(n).toLocaleString()}`;
+  const fmtD = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const totalFundsYen =
+    settings.totalFundsManYen !== undefined
+      ? settings.totalFundsManYen * 10000
+      : undefined;
+
+  if (result.kind === "jp-success") {
+    const header = result.symbol ? `${dateStr} ${result.symbol}` : dateStr;
+    const lines = [
+      header,
+      "─────────────────",
+      `エントリー  ${fmtY(result.stockPrice)} × ${result.shares.toLocaleString()}株`,
+      `           = ${fmtY(result.requiredInvestment)}`,
+    ];
+    if (result.distancePct !== undefined) {
+      const d = result.distancePct;
+      const sl = result.stockPrice * (1 - d / 100);
+      const slAmt = result.shares * (result.stockPrice - sl);
+      const tpPct = d * 2;
+      const tp = result.stockPrice * (1 + tpPct / 100);
+      const tpAmt = result.shares * (tp - result.stockPrice);
+      const rr = slAmt > 0 ? tpAmt / slAmt : 0;
+      lines.push(
+        "",
+        `20MA距離   ${d.toFixed(2)}%`,
+        `🛑 損切り  ${fmtY(sl)} (-${d.toFixed(2)}% / -${fmtY(slAmt)})`,
+        `🎯 利確    ${fmtY(tp)} (+${tpPct.toFixed(2)}% / +${fmtY(tpAmt)})`,
+        `RR比      ${rr.toFixed(2)}`
+      );
+    }
+    if (totalFundsYen) {
+      const ratio = (result.requiredInvestment / totalFundsYen) * 100;
+      lines.push(
+        "",
+        `総資金比率 ${ratio.toFixed(1)}% (総資金 ${settings.totalFundsManYen?.toLocaleString()}万円)`
+      );
+    }
+    return lines.join("\n");
+  }
+
+  if (result.kind === "us-success") {
+    const header = result.symbol ? `${dateStr} ${result.symbol}` : dateStr;
+    const lines = [
+      header,
+      "─────────────────",
+      `エントリー  ${fmtD(result.stockPriceUsd)} × ${result.shares.toLocaleString()}株`,
+      `           = ${fmtD(result.requiredInvestmentUsd)}`,
+      `円換算     ≈${fmtY(result.requiredInvestmentJpy)}`,
+      `レート     1USD = ${result.exchangeRate.toFixed(2)}円`,
+    ];
+    if (totalFundsYen) {
+      const ratio = (result.requiredInvestmentJpy / totalFundsYen) * 100;
+      lines.push(
+        "",
+        `総資金比率 ${ratio.toFixed(1)}% (総資金 ${settings.totalFundsManYen?.toLocaleString()}万円)`
+      );
+    }
+    return lines.join("\n");
+  }
+  return null;
+};
+
+// ---- 設定モーダル ----
+const SettingsModal = ({
+  isOpen,
+  onClose,
+  settings,
+  onSave,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  settings: Settings;
+  onSave: (s: Settings) => void;
+}) => {
+  const [val, setVal] = useState<string>(
+    settings.totalFundsManYen !== undefined ? String(settings.totalFundsManYen) : ""
+  );
+  useEffect(() => {
+    setVal(
+      settings.totalFundsManYen !== undefined ? String(settings.totalFundsManYen) : ""
+    );
+  }, [settings, isOpen]);
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="sm">
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>設定</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          <FormControl>
+            <FormLabel fontSize="sm">総資金（任意）</FormLabel>
+            <InputGroup>
+              <Input
+                value={val}
+                inputMode="decimal"
+                placeholder="例: 800"
+                onChange={(e) => setVal(e.target.value)}
+              />
+              <InputRightAddon>万円</InputRightAddon>
+            </InputGroup>
+            <Text fontSize="xs" color="gray.500" mt={1}>
+              設定すると、計算結果に「総資金の何%を投入したか」が表示されます。
+            </Text>
+          </FormControl>
+        </ModalBody>
+        <ModalFooter gap={2}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setVal("");
+              onSave({ ...settings, totalFundsManYen: undefined });
+              onClose();
+            }}
+          >
+            クリア
+          </Button>
+          <Button
+            colorScheme="blue"
+            onClick={() => {
+              const n = parseFloat(val);
+              onSave({
+                ...settings,
+                totalFundsManYen: isFinite(n) && n > 0 ? n : undefined,
+              });
+              onClose();
+            }}
+          >
+            保存
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+};
+
+// ---- 履歴行 ----
+const HistoryRow = ({
+  entry,
+  onDelete,
+}: {
+  entry: HistoryEntry;
+  onDelete: (id: string) => void;
+}) => {
+  const date = formatDateSlash(entry.timestamp);
+  const moneyJpy = `¥${Math.round(entry.investmentAmountJpy).toLocaleString()}`;
+  return (
+    <Flex
+      align="center"
+      justify="space-between"
+      py={2}
+      borderBottom="1px solid"
+      borderColor="gray.100"
+      fontSize="sm"
+    >
+      <Box minW={0} flex="1">
+        <HStack spacing={2} mb={0.5}>
+          <Text color="gray.500" fontSize="xs">
+            {date}
+          </Text>
+          <Badge colorScheme={entry.market === "JP" ? "blue" : "purple"}>
+            {entry.market === "JP" ? "日本株" : "米国株"}
+          </Badge>
+          {entry.symbol && (
+            <Text fontWeight="bold" isTruncated>
+              {entry.symbol}
+            </Text>
+          )}
+        </HStack>
+        <Text color="gray.700" fontSize="xs">
+          {entry.market === "JP"
+            ? `¥${entry.stockPrice.toLocaleString()}`
+            : `$${entry.stockPrice}`}
+          {" × "}
+          {entry.shares.toLocaleString()}株 = {moneyJpy}
+          {entry.distancePct !== undefined && ` ／ 距離${entry.distancePct.toFixed(2)}%`}
+        </Text>
+      </Box>
+      <IconButton
+        aria-label="削除"
+        icon={<DeleteIcon />}
+        size="xs"
+        variant="ghost"
+        colorScheme="red"
+        onClick={() => onDelete(entry.id)}
+      />
+    </Flex>
+  );
+};
+
 const App = () => {
   const [result, setResult] = useState<CalcResult | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory());
+  const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const toast = useToast();
+
+  const addHistory = useCallback(
+    (e: Omit<HistoryEntry, "id" | "timestamp">) => {
+      setHistory((prev) => {
+        const next = [
+          {
+            ...e,
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            timestamp: Date.now(),
+          },
+          ...prev,
+        ].slice(0, HISTORY_MAX);
+        saveHistory(next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const deleteHistory = useCallback((id: string) => {
+    setHistory((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      saveHistory(next);
+      return next;
+    });
+  }, []);
+
+  const clearHistory = useCallback(() => {
+    if (!confirm("履歴を全部消します。よろしいですか？")) return;
+    setHistory([]);
+    saveHistory([]);
+  }, []);
+
+  const handleSaveSettings = useCallback((s: Settings) => {
+    setSettings(s);
+    saveSettings(s);
+  }, []);
+
+  const onCopy = useCallback(async () => {
+    if (!result) return;
+    const text = buildCopyText(result, settings);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "コピーしました",
+        status: "success",
+        duration: 1500,
+        position: "top",
+      });
+    } catch {
+      toast({
+        title: "コピーに失敗しました",
+        status: "error",
+        duration: 2000,
+        position: "top",
+      });
+    }
+  }, [result, settings, toast]);
+
+  // 総資金比率（円ベース）
+  const totalFundsYen =
+    settings.totalFundsManYen !== undefined
+      ? settings.totalFundsManYen * 10000
+      : undefined;
+
+  const ratioText = (jpy: number): string | null => {
+    if (!totalFundsYen) return null;
+    return `総資金の ${((jpy / totalFundsYen) * 100).toFixed(1)}% (総資金 ${settings.totalFundsManYen?.toLocaleString()}万円)`;
+  };
 
   return (
     <ChakraProvider>
@@ -533,12 +956,23 @@ const App = () => {
         <Container maxW="md">
           <Box bg="white" p={{ base: 5, md: 8 }} borderRadius="xl" boxShadow="md">
             <Stack spacing={5}>
-              <Box>
-                <Heading size="md">投資金額から株数計算すぅーる</Heading>
-                <Text mt={1} fontSize="sm" color="gray.600">
-                  日本株は100株単位、米国株は1株単位で計算します。
-                </Text>
-              </Box>
+              <Flex justify="space-between" align="flex-start">
+                <Box>
+                  <Heading size="md">投資金額から株数計算すぅーる</Heading>
+                  <Text mt={1} fontSize="sm" color="gray.600">
+                    日本株は100株単位、米国株は1株単位で計算します。
+                  </Text>
+                </Box>
+                <Tooltip label="設定">
+                  <IconButton
+                    aria-label="設定"
+                    icon={<SettingsIcon />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={onOpen}
+                  />
+                </Tooltip>
+              </Flex>
 
               <Tabs
                 variant="soft-rounded"
@@ -551,10 +985,10 @@ const App = () => {
                 </TabList>
                 <TabPanels>
                   <TabPanel px={0}>
-                    <JpStockForm setResult={setResult} />
+                    <JpStockForm setResult={setResult} addHistory={addHistory} />
                   </TabPanel>
                   <TabPanel px={0}>
-                    <UsStockForm setResult={setResult} />
+                    <UsStockForm setResult={setResult} addHistory={addHistory} />
                   </TabPanel>
                 </TabPanels>
               </Tabs>
@@ -562,6 +996,19 @@ const App = () => {
               {result && (
                 <>
                   <Divider />
+                  {(result.kind === "jp-success" ||
+                    result.kind === "us-success") && (
+                    <Flex justify="flex-end">
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        leftIcon={<CopyIcon />}
+                        onClick={onCopy}
+                      >
+                        コピー
+                      </Button>
+                    </Flex>
+                  )}
                   {result.kind === "jp-success" && (
                     <Stack spacing={3}>
                       <SimpleGrid columns={2} spacing={3}>
@@ -580,6 +1027,11 @@ const App = () => {
                           <StatHelpText mb={0}>円</StatHelpText>
                         </Stat>
                       </SimpleGrid>
+                      {ratioText(result.requiredInvestment) && (
+                        <Text fontSize="xs" color="gray.600" textAlign="right">
+                          {ratioText(result.requiredInvestment)}
+                        </Text>
+                      )}
                       {result.distancePct !== undefined && (() => {
                         const dist = result.distancePct;
                         const stopLossPrice = result.stockPrice * (1 - dist / 100);
@@ -650,6 +1102,11 @@ const App = () => {
                           </StatHelpText>
                         </Stat>
                       </SimpleGrid>
+                      {ratioText(result.requiredInvestmentJpy) && (
+                        <Text fontSize="xs" color="gray.600" textAlign="right">
+                          {ratioText(result.requiredInvestmentJpy)}
+                        </Text>
+                      )}
                       <Text fontSize="xs" color="gray.500" textAlign="right">
                         適用レート: 1 USD = {result.exchangeRate.toFixed(2)} 円
                       </Text>
@@ -678,10 +1135,52 @@ const App = () => {
                   )}
                 </>
               )}
+
+              <Divider />
+
+              <Box>
+                <Flex justify="space-between" align="center" mb={2}>
+                  <HStack spacing={2}>
+                    <Text fontSize="sm" fontWeight="bold" color="gray.700">
+                      履歴
+                    </Text>
+                    {history.length > 0 && (
+                      <Badge colorScheme="gray">{history.length}件</Badge>
+                    )}
+                  </HStack>
+                  {history.length > 0 && (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      colorScheme="red"
+                      onClick={clearHistory}
+                    >
+                      全削除
+                    </Button>
+                  )}
+                </Flex>
+                {history.length === 0 ? (
+                  <Text fontSize="sm" color="gray.400">
+                    まだ履歴がありません。計算するとブラウザに保存されます。
+                  </Text>
+                ) : (
+                  <Box maxH="320px" overflowY="auto">
+                    {history.map((e) => (
+                      <HistoryRow key={e.id} entry={e} onDelete={deleteHistory} />
+                    ))}
+                  </Box>
+                )}
+              </Box>
             </Stack>
           </Box>
         </Container>
       </Box>
+      <SettingsModal
+        isOpen={isOpen}
+        onClose={onClose}
+        settings={settings}
+        onSave={handleSaveSettings}
+      />
     </ChakraProvider>
   );
 };
