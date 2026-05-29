@@ -36,6 +36,16 @@ import { useForm, Controller } from "react-hook-form";
 type JpFormData = {
   stockPrice?: number;
   investmentAmount?: number;
+  ma20DistancePercent?: number;
+};
+
+// ルール: 投資額(万円) = MIN(500, 750 / 20MAとの距離%)
+const JP_LOSS_CUT_YEN = 75_000;
+const JP_INVESTMENT_CAP_MAN = 500;
+const computeSuggestedInvestmentMan = (distancePct: number): number => {
+  if (!isFinite(distancePct) || distancePct <= 0) return NaN;
+  const raw = JP_LOSS_CUT_YEN / 10_000 / (distancePct / 100); // 万円換算
+  return Math.min(JP_INVESTMENT_CAP_MAN, Math.round(raw));
 };
 
 type UsFormData = {
@@ -112,9 +122,16 @@ const JpStockForm = ({
 }: {
   setResult: (r: CalcResult | null) => void;
 }) => {
-  const { control, handleSubmit } = useForm<JpFormData>({
-    defaultValues: { stockPrice: undefined, investmentAmount: undefined },
+  const { control, handleSubmit, setValue, watch } = useForm<JpFormData>({
+    defaultValues: {
+      stockPrice: undefined,
+      investmentAmount: undefined,
+      ma20DistancePercent: undefined,
+    },
   });
+
+  const distancePct = parseNum(watch("ma20DistancePercent"));
+  const overEntryCondition = isFinite(distancePct) && distancePct > 5;
 
   const onSubmit = (data: JpFormData) => {
     const stockPrice = parseNum(data.stockPrice);
@@ -154,6 +171,44 @@ const JpStockForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={4}>
+        <Controller
+          name="ma20DistancePercent"
+          control={control}
+          render={({ field }) => (
+            <FormControl>
+              <FormLabel fontSize="sm" mb={1}>
+                20MAとの距離
+              </FormLabel>
+              <InputGroup>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  inputMode="decimal"
+                  placeholder="例: 2.5"
+                  onChange={(e) => {
+                    field.onChange(e);
+                    const pct = parseFloat(e.target.value);
+                    const suggested = computeSuggestedInvestmentMan(pct);
+                    if (isFinite(suggested)) {
+                      setValue("investmentAmount", suggested, {
+                        shouldDirty: true,
+                      });
+                    }
+                  }}
+                />
+                <InputRightAddon>%</InputRightAddon>
+              </InputGroup>
+              <Text fontSize="xs" color="gray.500" mt={1}>
+                入力すると下の投資金額が自動入力されます（手動で上書きも可）
+              </Text>
+              {overEntryCondition && (
+                <Text fontSize="xs" color="orange.600" mt={1} fontWeight="bold">
+                  ⚠️ 距離 5% 超え。エントリー条件外です。
+                </Text>
+              )}
+            </FormControl>
+          )}
+        />
         <Controller
           name="investmentAmount"
           control={control}
