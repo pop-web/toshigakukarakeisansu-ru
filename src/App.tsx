@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import {
   ChakraProvider,
   Box,
@@ -42,7 +43,14 @@ import {
   Flex,
   Badge,
 } from "@chakra-ui/react";
-import { RepeatIcon, SettingsIcon, CopyIcon, DeleteIcon } from "@chakra-ui/icons";
+import {
+  RepeatIcon,
+  SettingsIcon,
+  CopyIcon,
+  DeleteIcon,
+  DownloadIcon,
+  AttachmentIcon,
+} from "@chakra-ui/icons";
 import { useForm, Controller } from "react-hook-form";
 
 type JpFormData = {
@@ -91,7 +99,7 @@ type Settings = {
 
 const HISTORY_KEY = "suuru-history-v1";
 const SETTINGS_KEY = "suuru-settings-v1";
-const HISTORY_MAX = 100;
+const HISTORY_MAX = 1000;
 
 const loadHistory = (): HistoryEntry[] => {
   try {
@@ -1067,6 +1075,129 @@ const App = () => {
     saveSettings(s);
   }, []);
 
+  // ---- バックアップ ----
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const exportBackup = useCallback(() => {
+    const payload = {
+      app: "投資金額から株数計算すぅーる",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      history,
+      settings,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+    a.href = url;
+    a.download = `suuru-backup-${y}${m}${d}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({
+      title: `${history.length}件をバックアップしました`,
+      status: "success",
+      duration: 1500,
+      position: "top",
+    });
+  }, [history, settings, toast]);
+
+  const onImportClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFileSelected = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data || !Array.isArray(data.history)) {
+          throw new Error("ファイル形式が違うようです");
+        }
+        // 必須フィールドだけ簡易チェックして取り込む
+        const validEntries: HistoryEntry[] = data.history.filter(
+          (x: unknown): x is HistoryEntry => {
+            if (!x || typeof x !== "object") return false;
+            const e = x as Record<string, unknown>;
+            return (
+              typeof e.id === "string" &&
+              typeof e.timestamp === "number" &&
+              (e.market === "JP" || e.market === "US") &&
+              typeof e.stockPrice === "number" &&
+              typeof e.shares === "number" &&
+              typeof e.investmentAmountJpy === "number"
+            );
+          }
+        );
+        if (validEntries.length === 0) {
+          throw new Error("有効な履歴がファイル内に見つかりませんでした");
+        }
+
+        const merge = confirm(
+          `${validEntries.length}件の履歴が含まれています。\n\n` +
+            "OK: 既存に統合（同IDは上書き）\n" +
+            "キャンセル: 既存を全部捨ててこのファイルに置き換え"
+        );
+
+        let next: HistoryEntry[];
+        if (merge) {
+          const map = new Map<string, HistoryEntry>();
+          history.forEach((e) => map.set(e.id, e));
+          validEntries.forEach((e) => map.set(e.id, e));
+          next = Array.from(map.values())
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, HISTORY_MAX);
+        } else {
+          next = validEntries
+            .slice()
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, HISTORY_MAX);
+        }
+        setHistory(next);
+        saveHistory(next);
+
+        if (
+          data.settings &&
+          typeof data.settings === "object" &&
+          (data.settings as Settings).totalFundsManYen !== undefined
+        ) {
+          const s = data.settings as Settings;
+          setSettings(s);
+          saveSettings(s);
+        }
+
+        toast({
+          title: `${validEntries.length}件取り込みました`,
+          description: merge ? "既存と統合済み" : "既存を置き換え済み",
+          status: "success",
+          duration: 2000,
+          position: "top",
+        });
+      } catch (err) {
+        toast({
+          title: "インポート失敗",
+          description: err instanceof Error ? err.message : String(err),
+          status: "error",
+          duration: 3000,
+          position: "top",
+        });
+      } finally {
+        // 同じファイルを選び直したときも change が発火するように
+        if (e.target) e.target.value = "";
+      }
+    },
+    [history, toast]
+  );
+
   const onCopy = useCallback(async () => {
     if (!result) return;
     const text = buildCopyText(result, settings);
@@ -1336,25 +1467,66 @@ const App = () => {
               <Divider />
 
               <Box>
-                <Flex justify="space-between" align="center" mb={2}>
+                <Flex
+                  justify="space-between"
+                  align="center"
+                  mb={2}
+                  gap={2}
+                  flexWrap="wrap"
+                >
                   <HStack spacing={2}>
                     <Text fontSize="sm" fontWeight="bold" color="gray.700">
                       履歴
                     </Text>
                     {history.length > 0 && (
-                      <Badge colorScheme="gray">{history.length}件</Badge>
+                      <Badge colorScheme="gray">
+                        {history.length}件{" "}
+                        <Box as="span" color="gray.400" fontWeight="normal">
+                          / {HISTORY_MAX}
+                        </Box>
+                      </Badge>
                     )}
                   </HStack>
-                  {history.length > 0 && (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      colorScheme="red"
-                      onClick={clearHistory}
-                    >
-                      全削除
-                    </Button>
-                  )}
+                  <HStack spacing={1}>
+                    <Tooltip label="JSONファイルとしてダウンロード">
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        leftIcon={<DownloadIcon />}
+                        onClick={exportBackup}
+                        isDisabled={history.length === 0}
+                      >
+                        エクスポート
+                      </Button>
+                    </Tooltip>
+                    <Tooltip label="JSONファイルから復元">
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        leftIcon={<AttachmentIcon />}
+                        onClick={onImportClick}
+                      >
+                        インポート
+                      </Button>
+                    </Tooltip>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      style={{ display: "none" }}
+                      onChange={onFileSelected}
+                    />
+                    {history.length > 0 && (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        colorScheme="red"
+                        onClick={clearHistory}
+                      >
+                        全削除
+                      </Button>
+                    )}
+                  </HStack>
                 </Flex>
                 {history.length === 0 ? (
                   <Text fontSize="sm" color="gray.400">
