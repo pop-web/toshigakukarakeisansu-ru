@@ -64,6 +64,13 @@ import type { User } from "./cloud";
 import { firebaseReady } from "./firebase";
 import { isAllowed } from "./access";
 import type { HistoryEntry, Settings } from "./types/storage";
+import { jpNames } from "./jpNames";
+
+// 証券コード(日本株) → 社名。全角→半角などを吸収して引く
+const jpNameOf = (code?: string): string | undefined => {
+  const c = (code ?? "").normalize("NFKC").trim();
+  return c ? jpNames[c] : undefined;
+};
 
 type JpFormData = {
   stockPrice?: number;
@@ -306,21 +313,36 @@ const JpStockForm = ({
         <Controller
           name="symbol"
           control={control}
-          render={({ field }) => (
-            <FormControl>
-              <FormLabel fontSize="sm" mb={1}>
-                銘柄
-                <Box as="span" ml={2} fontSize="xs" color="gray.500">
-                  （任意）
-                </Box>
-              </FormLabel>
-              <Input
-                {...field}
-                value={field.value ?? ""}
-                placeholder="例: トヨタ自動車 (7203)"
-              />
-            </FormControl>
-          )}
+          render={({ field }) => {
+            const code = (field.value ?? "").trim();
+            const name = jpNameOf(code);
+            return (
+              <FormControl>
+                <FormLabel fontSize="sm" mb={1}>
+                  銘柄コード
+                  <Box as="span" ml={2} fontSize="xs" color="gray.500">
+                    （任意）
+                  </Box>
+                </FormLabel>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  placeholder="例: 7203"
+                  inputMode="numeric"
+                />
+                {name && (
+                  <Text mt={1} fontSize="sm" color="green.600" fontWeight="medium">
+                    {name}
+                  </Text>
+                )}
+                {code && !name && (
+                  <Text mt={1} fontSize="xs" color="gray.400">
+                    該当する銘柄名が見つかりません（コードを確認）
+                  </Text>
+                )}
+              </FormControl>
+            );
+          }}
         />
         <Box>
           <Text fontSize="xs" color="gray.600" mb={2} fontWeight="bold">
@@ -609,7 +631,7 @@ const UsStockForm = ({
           render={({ field }) => (
             <FormControl>
               <FormLabel fontSize="sm" mb={1}>
-                銘柄
+                ティッカー（シンボル）
                 <Box as="span" ml={2} fontSize="xs" color="gray.500">
                   （任意）
                 </Box>
@@ -617,7 +639,9 @@ const UsStockForm = ({
               <Input
                 {...field}
                 value={field.value ?? ""}
+                onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                 placeholder="例: AAPL"
+                autoCapitalize="characters"
               />
             </FormControl>
           )}
@@ -927,6 +951,11 @@ const HistoryRow = ({
           {entry.symbol && (
             <Text fontWeight="bold" isTruncated>
               {entry.symbol}
+              {entry.market === "JP" && jpNameOf(entry.symbol) && (
+                <Box as="span" ml={1} fontWeight="normal" color="gray.600">
+                  {jpNameOf(entry.symbol)}
+                </Box>
+              )}
             </Text>
           )}
         </HStack>
