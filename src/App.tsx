@@ -101,7 +101,7 @@ type UsFormData = {
 // ---- 履歴 / 設定 ----（型は ./types/storage に集約）
 const HISTORY_KEY = "suuru-history-v1";
 const SETTINGS_KEY = "suuru-settings-v1";
-const HISTORY_MAX = 1000;
+const HISTORY_MAX = 3000; // Firestore 1ドキュメント1MB上限の安全圏（1件≈200B×3000≈0.6MB）
 
 const loadHistory = (): HistoryEntry[] => {
   try {
