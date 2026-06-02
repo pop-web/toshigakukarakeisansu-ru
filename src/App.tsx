@@ -52,6 +52,18 @@ import {
   AttachmentIcon,
 } from "@chakra-ui/icons";
 import { useForm, Controller } from "react-hook-form";
+import {
+  watchAuth,
+  signInGoogle,
+  signOutUser,
+  loadCloud,
+  saveCloud,
+  mergeHistory,
+} from "./cloud";
+import type { User } from "./cloud";
+import { firebaseReady } from "./firebase";
+import { isAllowed } from "./access";
+import type { HistoryEntry, Settings } from "./types/storage";
 
 type JpFormData = {
   stockPrice?: number;
@@ -79,24 +91,7 @@ type UsFormData = {
   ma20PriceUsd?: number;
 };
 
-// ---- 履歴 / 設定 ----
-type HistoryEntry = {
-  id: string;
-  timestamp: number;
-  market: "JP" | "US";
-  symbol?: string;
-  stockPrice: number;
-  shares: number;
-  investmentAmountJpy: number;
-  distancePct?: number;
-  exchangeRate?: number;
-  investmentAmountUsd?: number;
-};
-
-type Settings = {
-  totalFundsManYen?: number; // 総資金（万円）
-};
-
+// ---- 履歴 / 設定 ----（型は ./types/storage に集約）
 const HISTORY_KEY = "suuru-history-v1";
 const SETTINGS_KEY = "suuru-settings-v1";
 const HISTORY_MAX = 1000;
@@ -963,6 +958,87 @@ const App = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
+  // ---- ログイン（任意）＋ クラウド同期 ----
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  // 認証監視: ログインしたらクラウドとローカルを統合
+  useEffect(() => {
+    if (!firebaseReady) {
+      setAuthReady(true);
+      return;
+    }
+    return watchAuth(async (u) => {
+      setAuthReady(true);
+      // 限定公開: 許可外アカウントは即サインアウト
+      if (u && !isAllowed(u.uid)) {
+        await signOutUser();
+        setUser(null);
+        toast({
+          title: "このアカウントは利用できません",
+          description: "許可されたアカウントでログインしてください。",
+          status: "error",
+          duration: 6000,
+          isClosable: true,
+        });
+        return;
+      }
+      setUser(u);
+      if (u) {
+        setSyncing(true);
+        try {
+          const cloud = await loadCloud(u.uid);
+          if (cloud) {
+            setHistory((local) => {
+              const merged = mergeHistory(local, cloud.history);
+              saveHistory(merged);
+              return merged;
+            });
+            if (cloud.settings && cloud.settings.totalFundsManYen != null) {
+              setSettings(() => {
+                saveSettings(cloud.settings);
+                return cloud.settings;
+              });
+            }
+          }
+        } catch {
+          // 読み込み失敗は無視（ローカルはそのまま）
+        } finally {
+          setSyncing(false);
+        }
+      }
+    });
+  }, [toast]);
+
+  // ログイン中は history/settings の変化をクラウドへ自動保存（デバウンス）
+  useEffect(() => {
+    if (!user || !isAllowed(user.uid)) return;
+    const t = setTimeout(() => {
+      void saveCloud(user.uid, history, settings);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [user, history, settings]);
+
+  const onSignIn = useCallback(async () => {
+    try {
+      await signInGoogle();
+    } catch {
+      toast({ title: "ログインに失敗しました", status: "error", duration: 4000 });
+    }
+  }, [toast]);
+
+  const onSignOut = useCallback(async () => {
+    await signOutUser();
+    setUser(null);
+    toast({
+      title: "ログアウトしました",
+      description: "この端末のデータ（ローカル保存）は残ります。",
+      status: "info",
+      duration: 3000,
+    });
+  }, [toast]);
+
   const addHistory = useCallback(
     (e: Omit<HistoryEntry, "id" | "timestamp">) => {
       setHistory((prev) => {
@@ -1168,16 +1244,51 @@ const App = () => {
                   <Text mt={1} fontSize="sm" color="gray.600">
                     日本株は100株単位、米国株は1株単位で計算します。
                   </Text>
+                  {firebaseReady && authReady && !user && (
+                    <Text mt={1} fontSize="xs" color="blue.500">
+                      ログインすると履歴・総資金がクラウド保存（端末間で同期）
+                    </Text>
+                  )}
                 </Box>
-                <Tooltip label="設定">
-                  <IconButton
-                    aria-label="設定"
-                    icon={<SettingsIcon />}
-                    size="sm"
-                    variant="ghost"
-                    onClick={onOpen}
-                  />
-                </Tooltip>
+                <HStack spacing={1}>
+                  {firebaseReady &&
+                    authReady &&
+                    (user ? (
+                      <Tooltip
+                        label={`${user.email ?? "ログイン中"}${
+                          syncing ? "（同期中…）" : "（クラウド同期中）"
+                        }`}
+                      >
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          colorScheme="gray"
+                          leftIcon={syncing ? <Spinner size="xs" /> : undefined}
+                          onClick={onSignOut}
+                        >
+                          ログアウト
+                        </Button>
+                      </Tooltip>
+                    ) : (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        colorScheme="blue"
+                        onClick={onSignIn}
+                      >
+                        ログイン
+                      </Button>
+                    ))}
+                  <Tooltip label="設定">
+                    <IconButton
+                      aria-label="設定"
+                      icon={<SettingsIcon />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={onOpen}
+                    />
+                  </Tooltip>
+                </HStack>
               </Flex>
 
               <Tabs
