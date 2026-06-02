@@ -65,12 +65,23 @@ import { firebaseReady } from "./firebase";
 import { isAllowed } from "./access";
 import type { HistoryEntry, Settings } from "./types/storage";
 import { jpNames } from "./jpNames";
+import { usNames } from "./usNames";
 
 // 証券コード(日本株) → 社名。全角→半角などを吸収して引く
 const jpNameOf = (code?: string): string | undefined => {
   const c = (code ?? "").normalize("NFKC").trim();
   return c ? jpNames[c] : undefined;
 };
+
+// ティッカー(米国株) → 社名
+const usNameOf = (ticker?: string): string | undefined => {
+  const t = (ticker ?? "").normalize("NFKC").trim().toUpperCase();
+  return t ? usNames[t] : undefined;
+};
+
+// 市場に応じた社名
+const nameOf = (market: "JP" | "US", symbol?: string): string | undefined =>
+  market === "JP" ? jpNameOf(symbol) : usNameOf(symbol);
 
 type JpFormData = {
   stockPrice?: number;
@@ -628,23 +639,37 @@ const UsStockForm = ({
         <Controller
           name="symbol"
           control={control}
-          render={({ field }) => (
-            <FormControl>
-              <FormLabel fontSize="sm" mb={1}>
-                ティッカー（シンボル）
-                <Box as="span" ml={2} fontSize="xs" color="gray.500">
-                  （任意）
-                </Box>
-              </FormLabel>
-              <Input
-                {...field}
-                value={field.value ?? ""}
-                onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                placeholder="例: AAPL"
-                autoCapitalize="characters"
-              />
-            </FormControl>
-          )}
+          render={({ field }) => {
+            const ticker = (field.value ?? "").trim().toUpperCase();
+            const name = usNameOf(ticker);
+            return (
+              <FormControl>
+                <FormLabel fontSize="sm" mb={1}>
+                  ティッカー（シンボル）
+                  <Box as="span" ml={2} fontSize="xs" color="gray.500">
+                    （任意）
+                  </Box>
+                </FormLabel>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                  placeholder="例: AAPL"
+                  autoCapitalize="characters"
+                />
+                {name && (
+                  <Text mt={1} fontSize="sm" color="green.600" fontWeight="medium">
+                    {name}
+                  </Text>
+                )}
+                {ticker && !name && (
+                  <Text mt={1} fontSize="xs" color="gray.400">
+                    該当する銘柄名が見つかりません（ティッカーを確認）
+                  </Text>
+                )}
+              </FormControl>
+            );
+          }}
         />
 
         <Box>
@@ -951,9 +976,9 @@ const HistoryRow = ({
           {entry.symbol && (
             <Text fontWeight="bold" isTruncated>
               {entry.symbol}
-              {entry.market === "JP" && jpNameOf(entry.symbol) && (
+              {nameOf(entry.market, entry.symbol) && (
                 <Box as="span" ml={1} fontWeight="normal" color="gray.600">
-                  {jpNameOf(entry.symbol)}
+                  {nameOf(entry.market, entry.symbol)}
                 </Box>
               )}
             </Text>
