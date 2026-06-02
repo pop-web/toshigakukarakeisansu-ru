@@ -4,7 +4,7 @@
 const RAW_ALLOWED: string[] = [
   // 許可する Firebase Auth UID（28文字）。複数可。
   // 取得: Firebaseコンソール → Authentication → ユーザー一覧 → 自分の行の「ユーザーUID」
-  "c3cbU6J4jwWPJDsXWNETk3iMPpz1", // koga（popweb782@gmail.com）
+  "tNmVfKjWPhOHa8NVnINDHgXtbH52", // koga（popweb782@gmail.com）※すぅーるプロジェクトのuid
 ];
 
 export const allowedUids = RAW_ALLOWED.filter(
