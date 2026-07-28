@@ -946,16 +946,49 @@ const SettingsModal = ({
   );
 };
 
+// 履歴エントリから計算後の結果（損切り・利確・RR）を再算出。
+// 保存済みの stockPrice / shares / distancePct から求めるので、既存の履歴にも遡って表示できる。
+const calcHistoryResult = (e: HistoryEntry) => {
+  const dist = e.distancePct;
+  if (dist === undefined || !isFinite(dist) || dist <= 0) return null;
+  const stopLoss = e.stockPrice * (1 - dist / 100);
+  const stopLossAmount = e.shares * (e.stockPrice - stopLoss);
+  const takeProfitPct = dist * 2;
+  const takeProfit = e.stockPrice * (1 + takeProfitPct / 100);
+  const takeProfitAmount = e.shares * (takeProfit - e.stockPrice);
+  const rr = stopLossAmount > 0 ? takeProfitAmount / stopLossAmount : 0;
+  return { dist, stopLoss, stopLossAmount, takeProfitPct, takeProfit, takeProfitAmount, rr };
+};
+
 // ---- 履歴行 ----
 const HistoryRow = ({
   entry,
   onDelete,
+  totalFundsManYen,
 }: {
   entry: HistoryEntry;
   onDelete: (id: string) => void;
+  totalFundsManYen?: number;
 }) => {
   const date = formatDateSlash(entry.timestamp);
   const moneyJpy = `¥${Math.round(entry.investmentAmountJpy).toLocaleString()}`;
+  const isJp = entry.market === "JP";
+  const r = calcHistoryResult(entry);
+  const rate = entry.exchangeRate;
+  const totalFundsYen =
+    totalFundsManYen && totalFundsManYen > 0 ? totalFundsManYen * 10000 : 0;
+  const fundsPct =
+    totalFundsYen > 0
+      ? ((entry.investmentAmountJpy / totalFundsYen) * 100).toFixed(1)
+      : null;
+  // 通貨に応じた価格・金額のフォーマッタ
+  const price = (v: number) =>
+    isJp ? `¥${Math.round(v).toLocaleString()}` : `$${v.toFixed(2)}`;
+  const amount = (v: number) => {
+    if (isJp) return `¥${Math.round(v).toLocaleString()}`;
+    const jpy = rate ? ` ≈¥${Math.round(v * rate).toLocaleString()}` : "";
+    return `$${v.toFixed(2)}${jpy}`;
+  };
   return (
     <Flex
       align="center"
@@ -970,8 +1003,8 @@ const HistoryRow = ({
           <Text color="gray.500" fontSize="xs">
             {date}
           </Text>
-          <Badge colorScheme={entry.market === "JP" ? "blue" : "purple"}>
-            {entry.market === "JP" ? "日本株" : "米国株"}
+          <Badge colorScheme={isJp ? "blue" : "purple"}>
+            {isJp ? "日本株" : "米国株"}
           </Badge>
           {entry.symbol && (
             <Text fontWeight="bold" isTruncated>
@@ -985,13 +1018,24 @@ const HistoryRow = ({
           )}
         </HStack>
         <Text color="gray.700" fontSize="xs">
-          {entry.market === "JP"
-            ? `¥${entry.stockPrice.toLocaleString()}`
-            : `$${entry.stockPrice}`}
+          {isJp ? `¥${entry.stockPrice.toLocaleString()}` : `$${entry.stockPrice}`}
           {" × "}
           {entry.shares.toLocaleString()}株 = {moneyJpy}
           {entry.distancePct !== undefined && ` ／ 距離${entry.distancePct.toFixed(2)}%`}
+          {fundsPct && ` ／ 総資金の${fundsPct}%`}
         </Text>
+        {r && (
+          <Text fontSize="xs" mt={0.5}>
+            <Box as="span" color="red.600">
+              🛑 {price(r.stopLoss)}（−{r.dist.toFixed(2)}% ／ 損切り
+              {amount(r.stopLossAmount)}）
+            </Box>
+            <Box as="span" color="purple.600" ml={2}>
+              🎯 {price(r.takeProfit)}（+{r.takeProfitPct.toFixed(2)}% ／ 利確
+              {amount(r.takeProfitAmount)} ／ RR{r.rr.toFixed(2)}）
+            </Box>
+          </Text>
+        )}
       </Box>
       <IconButton
         aria-label="削除"
@@ -1625,7 +1669,12 @@ const App = () => {
                 ) : (
                   <Box maxH="320px" overflowY="auto">
                     {history.map((e) => (
-                      <HistoryRow key={e.id} entry={e} onDelete={deleteHistory} />
+                      <HistoryRow
+                        key={e.id}
+                        entry={e}
+                        onDelete={deleteHistory}
+                        totalFundsManYen={settings.totalFundsManYen}
+                      />
                     ))}
                   </Box>
                 )}
