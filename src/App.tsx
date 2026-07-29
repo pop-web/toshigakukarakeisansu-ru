@@ -91,8 +91,8 @@ type JpFormData = {
   symbol?: string;
 };
 
-// ルール: 投資額(万円) = MIN(500, 750 / 損切りまでの距離%)
-const JP_LOSS_CUT_YEN = 75_000;
+// ルール: 投資額(万円) = MIN(500, 550 / 損切りまでの距離%)（損切り額55,000円 ÷ 距離%）
+const JP_LOSS_CUT_YEN = 55_000;
 const JP_INVESTMENT_CAP_MAN = 500;
 const computeSuggestedInvestmentMan = (distancePct: number): number => {
   if (!isFinite(distancePct) || distancePct <= 0) return NaN;
