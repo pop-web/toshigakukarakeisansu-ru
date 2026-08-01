@@ -421,7 +421,7 @@ const JpStockForm = ({
               )}
               {overEntryCondition && (
                 <Text fontSize="xs" color="orange.600" mt={1} fontWeight="bold">
-                  ⚠️ 距離 5% 超え。エントリー条件外です。
+                  ⚠️ 距離5%超：エントリー条件外（押し目として遠い＝初動過ぎの可能性）。下のロットは損切り55,000で自動算出済み。
                 </Text>
               )}
             </FormControl>
@@ -738,7 +738,7 @@ const UsStockForm = ({
               )}
               {overEntryConditionUs && (
                 <Text fontSize="xs" color="orange.600" mt={1} fontWeight="bold">
-                  ⚠️ 距離 5% 超え。エントリー条件外です。
+                  ⚠️ 距離5%超：エントリー条件外（押し目として遠い＝初動過ぎの可能性）。下のロットは損切り55,000で自動算出済み。
                 </Text>
               )}
             </FormControl>
